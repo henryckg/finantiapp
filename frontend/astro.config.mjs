@@ -8,7 +8,7 @@ import vercel from '@astrojs/vercel';
 // https://astro.build/config
 export default defineConfig({
   output: 'static',
-  site: 'https://localhost:4321',
+  site: 'https://finantiapp-demo.vercel.app/',
   trailingSlash: 'never',
 
   integrations: [react()],
