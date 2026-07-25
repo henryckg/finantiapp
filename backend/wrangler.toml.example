@@ -1,0 +1,19 @@
+name = "finanzas-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "finanzas-db"
+database_id = "TU_DATABASE_ID"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "TU_KV_NAMESPACE_ID"
+
+[vars]
+CORS_ORIGIN = "https://tu-dominio.vercel.app"

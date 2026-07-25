@@ -10,5 +10,5 @@ dist
 
 .agents
 .dev.vars
-.prod.wrangler.toml
-wrangler.toml
+backend/wrangler.toml
+backend/.prod.wrangler.toml
