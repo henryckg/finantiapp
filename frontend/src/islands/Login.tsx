@@ -6,6 +6,7 @@ import { FieldRow, Input } from '../components/ui/Field';
 
 export default function Login() {
   const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
   const loading = useAuthStore((state) => state.loading);
   const error = useAuthStore((state) => state.error);
 
@@ -22,7 +23,13 @@ export default function Login() {
       setLocalError('Completa email y contraseña');
       return;
     }
-    const success = await login(email.trim(), password);
+    if (mode === 'register' && password.length < 8) {
+      setLocalError('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    const success = mode === 'register'
+      ? await register(email.trim(), password, name.trim())
+      : await login(email.trim(), password);
     if (success) {
       window.location.href = '/dashboard';
     }
