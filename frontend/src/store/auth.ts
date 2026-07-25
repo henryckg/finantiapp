@@ -18,7 +18,7 @@ const demoUser: User = { ...DEMO_USER, createdAt: Date.now() };
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: IS_DEMO ? demoUser : null,
-  loading: false,
+  loading: IS_DEMO ? false : true,
   error: null,
   isDemo: IS_DEMO,
 

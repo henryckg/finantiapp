@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import type { Env } from '../index';
 import { signJWT, verifyJWT, hashPassword, verifyPassword } from '../lib/jwt';
+import { authMiddleware, getUserId } from '../middleware/auth';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -73,6 +74,15 @@ app.post('/login', zValidator('json', loginSchema), async (c) => {
     accessToken,
     refreshToken,
   });
+});
+
+app.get('/me', authMiddleware, async (c) => {
+  const userId = getUserId(c);
+  const user = await c.env.DB.prepare('SELECT id, email, name, created_at FROM users WHERE id = ?')
+    .bind(userId)
+    .first() as { id: string; email: string; name: string | null; created_at: number } | null;
+  if (!user) return c.json({ error: 'Usuario no encontrado' }, 404);
+  return c.json({ id: user.id, email: user.email, name: user.name, createdAt: user.created_at });
 });
 
 app.post('/logout', async (c) => {
