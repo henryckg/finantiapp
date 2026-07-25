@@ -61,4 +61,40 @@ app.get('/profitability', async (c) => {
   return c.json(result.results);
 });
 
+app.get('/profitability/compare', async (c) => {
+  const userId = getUserId(c);
+  const from = Number(c.req.query('from') ?? 0) || 0;
+  const to = Number(c.req.query('to') ?? Date.now()) || Date.now();
+  if (from > to) return c.json({ error: 'Rango de fechas inválido' }, 400);
+  const result = await c.env.DB.prepare(
+    `SELECT i.id, i.name, i.current_value AS current_value,
+      COALESCE(SUM(CASE WHEN t.type = 'investment_contribution' THEN t.amount WHEN t.type = 'investment_withdrawal' THEN -t.amount ELSE 0 END), 0) AS capital,
+      COALESCE(SUM(CASE WHEN t.type = 'investment_contribution' AND t.date BETWEEN ? AND ? THEN t.amount WHEN t.type = 'investment_withdrawal' AND t.date BETWEEN ? AND ? THEN -t.amount ELSE 0 END), 0) AS period_contribution
+     FROM investments i LEFT JOIN transactions t ON t.investment_id = i.id AND t.user_id = i.user_id
+     WHERE i.user_id = ? GROUP BY i.id ORDER BY i.name`,
+  )
+    .bind(from, to, from, to, userId)
+    .all();
+  return c.json({ from, to, investments: result.results });
+});
+
+app.get('/goals/:id/progress', async (c) => {
+  const userId = getUserId(c);
+  const goalId = c.req.param('id');
+  const goal = await c.env.DB.prepare('SELECT * FROM goals WHERE id = ? AND user_id = ?').bind(goalId, userId).first();
+  if (!goal) return c.json({ error: 'Objetivo no encontrado' }, 404);
+  const allocations = await c.env.DB.prepare(
+    `SELECT a.id, a.target_amount, a.investment_id, a.account_id,
+      COALESCE((SELECT SUM(CASE WHEN t.type = 'investment_contribution' THEN t.amount WHEN t.type = 'investment_withdrawal' THEN -t.amount ELSE 0 END) FROM transactions t WHERE t.user_id = ? AND t.investment_id = a.investment_id AND t.date >= ?), 0) AS investment_progress,
+      COALESCE((SELECT SUM(t.amount) FROM transactions t WHERE t.user_id = ? AND t.to_account_id = a.account_id AND t.type = 'transfer' AND t.date >= ?), 0) AS account_progress
+     FROM goal_allocations a WHERE a.goal_id = ?`,
+  )
+    .bind(userId, (goal as { created_at: number }).created_at, userId, (goal as { created_at: number }).created_at, goalId)
+    .all();
+  const rows = allocations.results as Array<{ target_amount: number; investment_progress: number; account_progress: number }>;
+  const progress = rows.reduce((sum, row) => sum + Math.max(row.investment_progress || row.account_progress || 0, 0), 0);
+  const targetAmount = (goal as { target_amount: number }).target_amount;
+  return c.json({ goal, allocations: allocations.results, progress, remaining: Math.max(targetAmount - progress, 0), progressPct: targetAmount > 0 ? Math.min((progress / targetAmount) * 100, 100) : 0 });
+});
+
 export const reportsRoutes = app;

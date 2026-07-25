@@ -8,5 +8,8 @@
     "preview": "pnpm --filter frontend preview",
     "backend:dev": "pnpm --filter backend dev",
     "backend:deploy": "pnpm --filter backend deploy"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }

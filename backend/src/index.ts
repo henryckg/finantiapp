@@ -25,7 +25,10 @@ app.use('*', logger());
 app.use(
   '*',
   cors({
-    origin: (origin, c) => origin ?? c.env.CORS_ORIGIN,
+    origin: (origin, c) => {
+      const allowed = (c.env.CORS_ORIGIN ?? '').split(',').map((value: string) => value.trim()).filter(Boolean);
+      return !origin || allowed.includes(origin) ? origin ?? allowed[0] ?? '*' : '';
+    },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -45,5 +48,7 @@ app.route('/reports', reportsRoutes);
 app.get('/', (c) =>
   c.json({ name: 'Finanzas API', version: '0.0.1', status: 'ok' }),
 );
+
+app.get('/health', (c) => c.json({ status: 'ok', timestamp: Date.now() }));
 
 export default app;

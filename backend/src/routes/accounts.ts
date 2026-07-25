@@ -22,6 +22,14 @@ app.get('/', async (c) => {
   const result = await c.env.DB.prepare('SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at')
     .bind(userId)
     .all();
+  if (c.req.query('shortcut') === 'true') {
+    return c.json(result.results.filter((account) => account.is_active === 1).map((account) => ({
+      id: account.id,
+      name: account.name,
+      balance: account.balance,
+      currency: account.currency,
+    })));
+  }
   return c.json(result.results);
 });
 

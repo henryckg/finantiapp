@@ -33,6 +33,15 @@ app.get('/', async (c) => {
   if (limit) { sql += ' LIMIT ?'; binds.push(Number(limit)); }
   if (offset) { sql += ' OFFSET ?'; binds.push(Number(offset)); }
   const result = await c.env.DB.prepare(sql).bind(...binds).all();
+  if (c.req.query('shortcut') === 'true') {
+    return c.json(result.results.map((transaction) => ({
+      id: transaction.id,
+      type: transaction.type,
+      amount: transaction.amount,
+      date: transaction.date,
+      description: transaction.description,
+    })));
+  }
   return c.json(result.results);
 });
 

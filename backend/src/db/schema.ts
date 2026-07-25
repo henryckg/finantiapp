@@ -30,6 +30,7 @@ export const categories = sqliteTable('categories', {
   color: text('color'),
   type: text('type').notNull(),
   isDefault: integer('is_default').default(0),
+  syncStatus: text('sync_status').notNull().default('synced'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -69,6 +70,7 @@ export const investmentValueSnapshots = sqliteTable('investment_value_snapshots'
   value: integer('value').notNull(),
   date: integer('date').notNull(),
   createdAt: integer('created_at').notNull(),
+  syncStatus: text('sync_status').notNull().default('synced'),
 });
 
 export const scheduledExpenses = sqliteTable('scheduled_expenses', {
@@ -93,6 +95,7 @@ export const goals = sqliteTable('goals', {
   targetDate: integer('target_date'),
   status: text('status').notNull().default('active'),
   notes: text('notes'),
+  syncStatus: text('sync_status').notNull().default('synced'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
@@ -103,5 +106,6 @@ export const goalAllocations = sqliteTable('goal_allocations', {
   investmentId: text('investment_id'),
   accountId: text('account_id'),
   targetAmount: integer('target_amount').notNull(),
+  syncStatus: text('sync_status').notNull().default('synced'),
   createdAt: integer('created_at').notNull(),
 });

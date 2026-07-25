@@ -109,12 +109,22 @@ id = "PEGA_AQUI_EL_ID"
 #### 2c. Aplicar migraciones
 
 ```bash
-npx wrangler d1 migrations create finanzas-db 0001_initial
-# Copia el contenido de src/db/migrations/0001_initial.sql al archivo generado
+# Las migraciones ya están en src/db/migrations/
+# 0001_initial.sql  — esquema completo
+# 0002_seed_categories.sql — categorías por defecto (referencia)
+# 0003_sync_status.sql — columnas sync_status para offline-first
 npx wrangler d1 migrations apply finanzas-db --remote
 ```
 
 #### 2d. Configurar secrets
+
+Para desarrollo local, copia `.dev.vars.example` a `.dev.vars` y edita los valores:
+
+```bash
+cp .dev.vars.example .dev.vars
+```
+
+Para producción:
 
 ```bash
 npx wrangler secret put JWT_SECRET
@@ -193,7 +203,7 @@ Te da una URL como `https://finanzas-api.tu-subdomain.workers.dev`. Vuelve a Ver
    - **Repetir con cada** item → sumar `balance`
    - **Mostrar resultado** → "Balance: $X"
 
-> **Nota:** La API acepta `?shortcut=true` para respuestas simplificadas si se implementa esa lógica en el Worker (pendiente).
+> **Nota:** La API acepta `?shortcut=true` en `/accounts` y `/transactions` para respuestas simplificadas. Puedes comprobar el estado del Worker en `/health`.
 
 ### 6. Cambiar de demo a producción
 

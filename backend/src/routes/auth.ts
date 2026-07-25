@@ -34,6 +34,21 @@ app.post('/register', zValidator('json', registerSchema), async (c) => {
     .bind(id, email, passwordHash, name ?? null, now)
     .run();
 
+  const defaultCategories = [
+    ['Alimentación', 'expense'], ['Transporte', 'expense'], ['Vivienda', 'expense'],
+    ['Salud', 'expense'], ['Educación', 'expense'], ['Entretención', 'expense'],
+    ['Ropa', 'expense'], ['Tecnología', 'expense'], ['Servicios', 'expense'],
+    ['Deudas', 'expense'], ['Otros', 'expense'], ['Sueldo', 'income'],
+    ['Freelance', 'income'], ['Inversiones', 'income'], ['Otros ingresos', 'income'],
+  ];
+  await c.env.DB.batch(
+    defaultCategories.map(([categoryName, categoryType]) =>
+      c.env.DB.prepare(
+        'INSERT INTO categories (id, user_id, name, type, is_default, created_at) VALUES (?, ?, ?, ?, 1, ?)',
+      ).bind(crypto.randomUUID(), id, categoryName, categoryType, now),
+    ),
+  );
+
   const accessToken = await signJWT({ sub: id }, c.env.JWT_SECRET, 900);
   const refreshToken = await signJWT({ sub: id }, c.env.JWT_REFRESH_SECRET, 2592000);
 
