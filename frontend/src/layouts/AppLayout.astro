@@ -1,0 +1,80 @@
+---
+import '../styles/global.css';
+import BottomNav from '../components/nav/BottomNav.astro';
+import CommandPalette from '../islands/CommandPalette';
+import SyncIndicator from '../islands/SyncIndicator';
+
+interface Props {
+  title: string;
+  subtitle?: string;
+}
+
+const { title, subtitle } = Astro.props;
+const isDemo = (import.meta.env.PUBLIC_DEMO ?? 'true') !== 'false';
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+    <title>{title} · Finanzas</title>
+    <meta name="description" content="Aplicación de finanzas personales" />
+    <meta name="theme-color" content="#0A0A0B" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Finanzas" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+  </head>
+  <body class="min-h-dvh">
+    <div class="mx-auto flex min-h-dvh w-full max-w-5xl flex-col">
+      <header
+        class="border-border-subtle bg-bg-primary/85 safe-top sticky top-0 z-30 border-b backdrop-blur-md"
+      >
+        <div class="flex items-center justify-between gap-3 px-4 py-3">
+          <div class="min-w-0">
+            <h1 class="truncate text-base font-semibold tracking-tight">{title}</h1>
+            {subtitle && <p class="text-text-secondary truncate text-xs">{subtitle}</p>}
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            {
+              isDemo && (
+                <span class="border-warning/30 bg-warning/10 text-warning hidden rounded border px-1.5 py-0.5 text-[0.6875rem] font-medium sm:inline-flex">
+                  Demo
+                </span>
+              )
+            }
+            <SyncIndicator client:only="react" />
+            <CommandPalette client:only="react" />
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 px-4 pt-4 pb-28">
+        <slot />
+      </main>
+
+      <BottomNav />
+    </div>
+
+    <script>
+      if ('serviceWorker' in navigator && import.meta.env.PROD) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Accounts from '../islands/Accounts';
+---
+
+<AppLayout title="Cuentas" subtitle="Saldos calculados desde tus movimientos">
+  <Accounts client:only="react" />
+</AppLayout>

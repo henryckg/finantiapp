@@ -1,0 +1,8 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Reports from '../islands/Reports';
+---
+
+<AppLayout title="Reportes" subtitle="Patrimonio, rentabilidad y categorías">
+  <Reports client:only="react" />
+</AppLayout>

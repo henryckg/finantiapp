@@ -1,0 +1,113 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg-primary: #0a0a0b;
+  --color-bg-secondary: #131316;
+  --color-bg-elevated: #1c1c1f;
+  --color-border-subtle: #27272a;
+  --color-border-strong: #34343a;
+  --color-accent: #5e6ad2;
+  --color-accent-hover: #6f7ae0;
+  --color-positive: #4cc38a;
+  --color-negative: #f0654a;
+  --color-warning: #e5a050;
+  --color-text-primary: #ededef;
+  --color-text-secondary: #9b9ba3;
+  --color-text-tertiary: #5c5c63;
+
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-panel: 0.625rem;
+
+  --default-transition-duration: 150ms;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-bg-primary text-text-primary font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    overscroll-behavior-y: none;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-bg-secondary border-border-subtle rounded-panel border;
+  }
+
+  .panel-elevated {
+    @apply bg-bg-elevated border-border-subtle rounded-panel border;
+  }
+
+  .label-xs {
+    @apply text-text-secondary text-[0.6875rem] font-medium tracking-wide uppercase;
+  }
+
+  .num {
+    @apply font-mono tabular-nums;
+  }
+
+  .field {
+    @apply bg-bg-primary border-border-subtle text-text-primary placeholder:text-text-tertiary w-full rounded-md border px-3 py-2 text-sm transition-colors;
+  }
+
+  .field:hover {
+    @apply border-border-strong;
+  }
+
+  .row-hover {
+    @apply transition-colors hover:bg-white/[0.025];
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

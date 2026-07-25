@@ -1,0 +1,8 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import ScheduledExpenses from '../islands/ScheduledExpenses';
+---
+
+<AppLayout title="Gastos programados" subtitle="Planifica tus gastos futuros">
+  <ScheduledExpenses client:only="react" />
+</AppLayout>

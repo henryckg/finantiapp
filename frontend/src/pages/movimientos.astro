@@ -1,0 +1,8 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Transactions from '../islands/Transactions';
+---
+
+<AppLayout title="Movimientos" subtitle="Historial completo y filtros">
+  <Transactions client:only="react" />
+</AppLayout>

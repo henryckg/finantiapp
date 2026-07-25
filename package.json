@@ -1,0 +1,12 @@
+{
+  "name": "finanzas-pwa",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "dev": "pnpm --filter frontend dev",
+    "build": "pnpm --filter frontend build",
+    "preview": "pnpm --filter frontend preview",
+    "backend:dev": "pnpm --filter backend dev",
+    "backend:deploy": "pnpm --filter backend deploy"
+  }
+}

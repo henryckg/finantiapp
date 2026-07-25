@@ -1,0 +1,11 @@
+node_modules
+dist
+.vercel
+.output
+.env
+.env.local
+.wrangler
+.DS_Store
+*.log
+
+.agents

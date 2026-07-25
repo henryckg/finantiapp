@@ -1,0 +1,8 @@
+---
+import AuthLayout from '../layouts/AuthLayout.astro';
+import Login from '../islands/Login';
+---
+
+<AuthLayout title="Iniciar sesión">
+  <Login client:only="react" />
+</AuthLayout>

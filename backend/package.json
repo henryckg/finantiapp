@@ -1,0 +1,24 @@
+{
+  "name": "finanzas-backend",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply finanzas-db"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "latest",
+    "drizzle-orm": "latest",
+    "hono": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "drizzle-kit": "latest",
+    "typescript": "latest",
+    "wrangler": "latest"
+  }
+}
