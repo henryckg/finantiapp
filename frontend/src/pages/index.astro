@@ -10,6 +10,18 @@ const destination = isDemo ? '/dashboard' : '/login';
     <meta http-equiv="refresh" content={`0; url=${destination}`} />
     <link rel="canonical" href={destination} />
     <title>Finanzas</title>
+    <meta name="description" content="Finanzas personales: movimientos, cuentas, inversiones y objetivos." />
+    <meta property="og:site_name" content="Finantiapp" />
+    <meta property="og:title" content="Finantiapp" />
+    <meta property="og:description" content="Finanzas personales: movimientos, cuentas, inversiones y objetivos." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={Astro.url.toString()} />
+    <meta property="og:image" content={new URL('/og.svg', Astro.url.origin).toString()} />
+    <meta property="og:locale" content="es_CL" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Finantiapp" />
+    <meta name="twitter:description" content="Finanzas personales: movimientos, cuentas, inversiones y objetivos." />
+    <meta name="twitter:image" content={new URL('/og.svg', Astro.url.origin).toString()} />
   </head>
   <body>
     <p>Redirigiendo…</p>

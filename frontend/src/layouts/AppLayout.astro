@@ -21,16 +21,27 @@ const isDemo = (import.meta.env.PUBLIC_DEMO ?? 'true') !== 'false';
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
     />
-    <title>{title} · Finanzas</title>
-    <meta name="description" content="Aplicación de finanzas personales" />
+    <title>{title} · Finantiapp</title>
+    <meta name="description" content="Finanzas personales: movimientos, cuentas, inversiones y objetivos." />
     <meta name="theme-color" content="#0A0A0B" />
+    <meta property="og:site_name" content="Finantiapp" />
+    <meta property="og:title" content={`${title} · Finantiapp`} />
+    <meta property="og:description" content="Finanzas personales: movimientos, cuentas, inversiones y objetivos." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={Astro.url.toString()} />
+    <meta property="og:image" content={new URL('/og.svg', Astro.url.origin).toString()} />
+    <meta property="og:locale" content="es_CL" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={`${title} · Finantiapp`} />
+    <meta name="twitter:description" content="Finanzas personales: movimientos, cuentas, inversiones y objetivos." />
+    <meta name="twitter:image" content={new URL('/og.svg', Astro.url.origin).toString()} />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Finanzas" />
+    <meta name="apple-mobile-web-app-title" content="Finantiapp" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

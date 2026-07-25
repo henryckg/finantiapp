@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#0A0A0B"/>
+  <rect x="40" y="40" width="1120" height="550" rx="32" fill="none" stroke="#27272A" stroke-width="4"/>
+
+  <g transform="translate(180, 220)">
+    <rect width="120" height="120" rx="28" fill="#0A0A0B" stroke="#27272A" stroke-width="4"/>
+    <path d="M34 76 L54 56 L70 72 L96 46" fill="none" stroke="#5E6AD2" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M96 46 L96 64 M96 46 L78 46" fill="none" stroke="#4CC38A" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="34" cy="76" r="7" fill="#EDEDEF"/>
+  </g>
+
+  <text x="180" y="420" fill="#EDEDEF" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="80" font-weight="700" letter-spacing="-0.04em">Finantiapp</text>
+  <text x="180" y="490" fill="#9FA0A3" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="32" font-weight="500">Controla tus movimientos, cuentas, inversiones y objetivos.</text>
+</svg>
