@@ -74,7 +74,7 @@ export default function Transactions() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
         <MetricCard label="Ingresos" value={formatMoney(totals.income)} tone="positive" />
         <MetricCard label="Gastos" value={formatMoney(totals.expense)} tone="negative" />
         <MetricCard
