@@ -6,6 +6,9 @@ import { accountBalances, portfolioMetrics } from '../lib/profitability';
 export function useAppData() {
   const store = useDataStore();
   const initAuth = useAuthStore((state) => state.init);
+  const user = useAuthStore((state) => state.user);
+  const loading = useAuthStore((state) => state.loading);
+  const isDemo = useAuthStore((state) => state.isDemo);
 
   useEffect(() => {
     void initAuth();
@@ -13,6 +16,12 @@ export function useAppData() {
       void useDataStore.getState().load();
     }
   }, [initAuth]);
+
+  useEffect(() => {
+    if (!isDemo && !loading && !user) {
+      window.location.href = '/login';
+    }
+  }, [isDemo, loading, user]);
 
   return store;
 }
