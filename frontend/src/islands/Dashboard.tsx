@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { Plus, ArrowRight } from 'lucide-react';
 import { useAppData, usePortfolio } from '../hooks/useAppData';
 import { formatLongMonth, formatMoney, formatPercent, relativeDayLabel } from '../lib/format';
-import { liquidTotal } from '../lib/profitability';
+import { goalProgress, liquidTotal } from '../lib/profitability';
 import { expensesByCategory, monthSummary } from '../lib/reports';
-import { Badge, MetricCard, Panel, Spinner } from '../components/ui/Primitives';
+import { Badge, MetricCard, Panel, ProgressBar, Spinner } from '../components/ui/Primitives';
 import { Button } from '../components/ui/Button';
 import { TransactionTable } from '../components/transactions/TransactionTable';
 import { TransactionSheet } from '../components/transactions/TransactionSheet';
@@ -12,7 +12,7 @@ import { ExpensesByCategory } from '../components/charts/ExpensesByCategory';
 import { InvestmentDistribution } from '../components/charts/InvestmentDistribution';
 
 export default function Dashboard() {
-  const { ready, accounts, transactions, investments, scheduledExpenses, categories } = useAppData();
+  const { ready, accounts, transactions, investments, scheduledExpenses, categories, goals, goalAllocations } = useAppData();
   const portfolio = usePortfolio();
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -46,6 +46,16 @@ export default function Dashboard() {
   const distribution = useMemo(
     () => investments.map((investment) => ({ name: investment.name, value: investment.currentValue })),
     [investments],
+  );
+
+  const goalSummaries = useMemo(
+    () =>
+      goals
+        .filter((goal) => goal.status === 'active')
+        .map((goal) => goalProgress(goal, goalAllocations, transactions, accounts, investments))
+        .sort((a, b) => a.progressPct - b.progressPct)
+        .slice(0, 4),
+    [goals, goalAllocations, transactions, accounts, investments],
   );
 
   if (!ready) {
@@ -138,6 +148,40 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <span className="num text-sm whitespace-nowrap">{formatMoney(expense.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel
+        title="Objetivos"
+        action={
+          <a href="/objetivos" className="text-text-secondary hover:text-text-primary text-xs">
+            Gestionar
+          </a>
+        }
+      >
+        {goalSummaries.length === 0 ? (
+          <p className="text-text-secondary px-4 py-6 text-center text-xs">
+            No tienes objetivos activos.
+          </p>
+        ) : (
+          <ul className="divide-border-subtle/70 divide-y">
+            {goalSummaries.map((goal) => (
+              <li key={goal.goalId} className="flex flex-col gap-1.5 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate text-sm">{goals.find((g) => g.id === goal.goalId)?.name ?? 'Objetivo'}</span>
+                  <span className="num text-xs whitespace-nowrap text-text-secondary">
+                    {formatMoney(goal.progress)} / {formatMoney(goal.targetAmount)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ProgressBar value={goal.progressPct} className="flex-1" />
+                  <span className="num text-text-tertiary w-10 text-right text-[0.625rem]">
+                    {formatPercent(goal.progressPct)}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
