@@ -7,7 +7,7 @@ import { FieldRow, Input } from '../components/ui/Field';
 export default function Login() {
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
-  const loading = useAuthStore((state) => state.loading);
+  const loading = useAuthStore((state) => state.submitting);
   const error = useAuthStore((state) => state.error);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');

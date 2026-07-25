@@ -6,6 +6,7 @@ import { apiFetch, setAccessToken, setRefreshToken, refreshSession } from '../li
 interface AuthState {
   user: User | null;
   loading: boolean;
+  submitting: boolean;
   error: string | null;
   isDemo: boolean;
   init: () => Promise<void>;
@@ -19,6 +20,7 @@ const demoUser: User = { ...DEMO_USER, createdAt: Date.now() };
 export const useAuthStore = create<AuthState>((set) => ({
   user: IS_DEMO ? demoUser : null,
   loading: IS_DEMO ? false : true,
+  submitting: false,
   error: null,
   isDemo: IS_DEMO,
 
@@ -46,7 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: demoUser, error: null });
       return true;
     }
-    set({ loading: true, error: null });
+    set({ submitting: true, error: null });
     try {
       const data = await apiFetch<{ user: User; accessToken: string; refreshToken: string }>(
         '/auth/login',
@@ -54,11 +56,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       );
       setAccessToken(data.accessToken);
       setRefreshToken(data.refreshToken);
-      set({ user: data.user, loading: false, error: null });
+      set({ user: data.user, submitting: false, error: null });
       return true;
     } catch (error) {
       set({
-        loading: false,
+        submitting: false,
         error: error instanceof Error ? error.message : 'No se pudo iniciar sesión',
       });
       return false;
@@ -70,7 +72,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: demoUser, error: null });
       return true;
     }
-    set({ loading: true, error: null });
+    set({ submitting: true, error: null });
     try {
       const data = await apiFetch<{ user: User; accessToken: string; refreshToken: string }>(
         '/auth/register',
@@ -78,11 +80,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       );
       setAccessToken(data.accessToken);
       setRefreshToken(data.refreshToken);
-      set({ user: data.user, loading: false, error: null });
+      set({ user: data.user, submitting: false, error: null });
       return true;
     } catch (error) {
       set({
-        loading: false,
+        submitting: false,
         error: error instanceof Error ? error.message : 'No se pudo registrar',
       });
       return false;
