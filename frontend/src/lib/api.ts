@@ -77,26 +77,38 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return (await response.json()) as T;
 }
 
-export async function refreshSession(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken || !API_URL) return false;
+let refreshPromise: Promise<boolean> | null = null;
 
-  try {
-    const response = await fetch(`${API_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!response.ok) {
-      setRefreshToken(null);
-      setAccessToken(null);
+export async function refreshSession(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken || !API_URL) return false;
+
+    try {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!response.ok) {
+        setRefreshToken(null);
+        setAccessToken(null);
+        return false;
+      }
+      const data = (await response.json()) as { accessToken: string; refreshToken?: string };
+      setAccessToken(data.accessToken);
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
+      return true;
+    } catch {
       return false;
     }
-    const data = (await response.json()) as { accessToken: string; refreshToken?: string };
-    setAccessToken(data.accessToken);
-    if (data.refreshToken) setRefreshToken(data.refreshToken);
-    return true;
-  } catch {
-    return false;
+  })();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
   }
 }
