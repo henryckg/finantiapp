@@ -50,6 +50,7 @@ interface DataState extends Snapshot {
   loading: boolean;
   error: string | null;
   syncing: boolean;
+  syncQueued: boolean;
   lastSyncError: string | null;
 
   load: () => Promise<void>;
@@ -112,6 +113,7 @@ export const useDataStore = create<DataState>((set, get) => {
       ? current.map((item) => (item.id === record.id ? record : item))
       : [...current, record];
     replaceInState(store, next as Snapshot[K]);
+    void get().sync();
   }
 
   async function drop<K extends StoreName>(store: K, id: string) {
@@ -121,6 +123,7 @@ export const useDataStore = create<DataState>((set, get) => {
       store,
       current.filter((item) => item.id !== id) as Snapshot[K],
     );
+    void get().sync();
   }
 
   function find<K extends StoreName>(store: K, id: string): Snapshot[K][number] | undefined {
@@ -133,6 +136,7 @@ export const useDataStore = create<DataState>((set, get) => {
     loading: false,
     error: null,
     syncing: false,
+    syncQueued: false,
     lastSyncError: null,
 
     load: async () => {
@@ -162,12 +166,19 @@ export const useDataStore = create<DataState>((set, get) => {
 
     sync: async () => {
       if (IS_DEMO) return;
-      set({ syncing: true });
+      if (get().syncing) {
+        set({ syncQueued: true });
+        return;
+      }
+      set({ syncing: true, syncQueued: false });
       const result = await syncNow();
       if (!result.skipped && !result.error) {
         await get().refresh();
       }
       set({ syncing: false, lastSyncError: result.error ?? null });
+      if (get().syncQueued) {
+        void get().sync();
+      }
     },
 
     resetDemoData: async () => {
