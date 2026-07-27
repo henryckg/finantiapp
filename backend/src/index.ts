@@ -45,6 +45,11 @@ app.route('/goals', goalsRoutes);
 app.route('/sync', syncRoutes);
 app.route('/reports', reportsRoutes);
 
+app.onError((err, c) => {
+  console.error('Unhandled error:', err);
+  return c.json({ error: 'Error interno del servidor', detail: err instanceof Error ? err.message : String(err) }, 500);
+});
+
 app.get('/', (c) =>
   c.json({ name: 'Finanzas API', version: '0.0.1', status: 'ok' }),
 );
