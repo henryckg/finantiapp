@@ -30,6 +30,17 @@ const tableNames: Record<string, string> = {
   goalAllocations: 'goal_allocations',
 };
 
+const pushOrder = [
+  'accounts',
+  'categories',
+  'investments',
+  'goals',
+  'transactions',
+  'snapshots',
+  'scheduledExpenses',
+  'goalAllocations',
+] as const;
+
 app.get('/', async (c) => {
   const userId = getUserId(c);
   const since = Math.max(0, Number(c.req.query('since') ?? 0) || 0);
@@ -51,25 +62,32 @@ app.post('/push', async (c) => {
   if (!parsed.success) return c.json({ error: 'Payload de sincronización inválido' }, 400);
 
   let pushed = 0;
-  for (const [store, records] of Object.entries(parsed.data)) {
-    const table = tableNames[store];
-    if (!table) continue;
+  try {
+    for (const store of pushOrder) {
+      const records = parsed.data[store];
+      if (!records || !records.length) continue;
+      const table = tableNames[store];
+      if (!table) continue;
 
-    for (const record of records) {
-      const id = typeof record.id === 'string' ? record.id : null;
-      if (!id) continue;
-      const owned = await ownsRecord(c.env.DB, store, id, userId);
-      const normalized = normalizeRecord(store, record, userId);
-      if (!owned && !(await canCreateRecord(c.env.DB, store, normalized, userId)) && !['accounts', 'categories', 'transactions', 'investments', 'scheduledExpenses', 'goals'].includes(store)) continue;
-      const columns = Object.keys(normalized);
-      const values = columns.map((column) => normalized[column]);
-      const placeholders = columns.map(() => '?').join(', ');
-      const updates = columns.filter((column) => column !== 'id').map((column) => `${column}=excluded.${column}`).join(', ');
-      await c.env.DB.prepare(
-        `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${updates}`,
-      ).bind(...values).run();
-      pushed += 1;
+      for (const record of records) {
+        const id = typeof record.id === 'string' ? record.id : null;
+        if (!id) continue;
+        const owned = await ownsRecord(c.env.DB, store, id, userId);
+        const normalized = normalizeRecord(store, record, userId);
+        if (!owned && !(await canCreateRecord(c.env.DB, store, normalized, userId)) && !['accounts', 'categories', 'transactions', 'investments', 'scheduledExpenses', 'goals'].includes(store)) continue;
+        const columns = Object.keys(normalized);
+        const values = columns.map((column) => normalized[column]);
+        const placeholders = columns.map(() => '?').join(', ');
+        const updates = columns.filter((column) => column !== 'id').map((column) => `${column}=excluded.${column}`).join(', ');
+        await c.env.DB.prepare(
+          `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${updates}`,
+        ).bind(...values).run();
+        pushed += 1;
+      }
     }
+  } catch (err) {
+    console.error('Sync push error:', err);
+    return c.json({ error: 'Error de sincronización', detail: err instanceof Error ? err.message : String(err) }, 500);
   }
 
   return c.json({ ok: true, pushed });
@@ -116,7 +134,7 @@ function normalizeRecord(store: string, record: Record<string, unknown>, userId:
     goals: ['id', 'user_id', 'name', 'target_amount', 'target_date', 'status', 'notes', 'created_at', 'updated_at'],
     goalAllocations: ['id', 'goal_id', 'investment_id', 'account_id', 'target_amount', 'created_at'],
   };
-  const aliases: Record<string, string> = { userId: 'user_id', createdAt: 'created_at', updatedAt: 'updated_at', isActive: 'is_active', toAccountId: 'to_account_id', investmentId: 'investment_id', categoryId: 'category_id', syncStatus: 'sync_status', currentValue: 'current_value', estimatedDate: 'estimated_date', linkedTransactionId: 'linked_transaction_id', targetAmount: 'target_amount', targetDate: 'target_date' };
+  const aliases: Record<string, string> = { userId: 'user_id', createdAt: 'created_at', updatedAt: 'updated_at', isActive: 'is_active', toAccountId: 'to_account_id', investmentId: 'investment_id', categoryId: 'category_id', syncStatus: 'sync_status', currentValue: 'current_value', estimatedDate: 'estimated_date', linkedTransactionId: 'linked_transaction_id', targetAmount: 'target_amount', targetDate: 'target_date', goalId: 'goal_id', accountId: 'account_id' };
   const result: Record<string, unknown> = {};
   for (const column of fields[store] ?? []) {
     const camel = Object.entries(aliases).find(([, value]) => value === column)?.[0];
