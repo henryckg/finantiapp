@@ -9,7 +9,7 @@ import type {
   Transaction,
 } from '../types';
 import { LIQUID_ACCOUNT_TYPES, type TransactionType } from '../types';
-import { startOfMonth, startOfYear } from './format';
+import { startOfDay, startOfMonth, startOfYear } from './format';
 
 export function investedCapital(transactions: Transaction[], investmentId: string): number {
   return transactions.reduce((total, tx) => {
@@ -182,10 +182,11 @@ export function goalProgress(
   investments: Investment[],
 ): GoalProgress {
   const goalAllocations = allocations.filter((alloc) => alloc.goalId === goal.id);
+  const createdAtStartOfDay = startOfDay(goal.createdAt);
 
   const allocationProgress = goalAllocations.map((alloc) => {
     const contributions = transactions.filter((tx) => {
-      if (tx.date < goal.createdAt) return false;
+      if (tx.date < createdAtStartOfDay) return false;
       if (alloc.investmentId && tx.investmentId === alloc.investmentId) {
         return tx.type === 'investment_contribution' || tx.type === 'investment_withdrawal';
       }
