@@ -1,0 +1,8 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Categories from '../islands/Categories';
+---
+
+<AppLayout title="Categorías" subtitle="Clasifica tus ingresos y gastos">
+  <Categories client:only="react" />
+</AppLayout>
