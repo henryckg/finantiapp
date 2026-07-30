@@ -171,6 +171,12 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   other: 'Otro',
 };
 
+export const CATEGORY_TYPE_LABELS: Record<CategoryType, string> = {
+  expense: 'Gasto',
+  income: 'Ingreso',
+  both: 'Ambos',
+};
+
 export const INVESTMENT_TYPE_LABELS: Record<InvestmentType, string> = {
   stock_cl: 'Acción Chile',
   stock_us: 'Acción EE.UU.',

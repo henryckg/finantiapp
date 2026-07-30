@@ -16,6 +16,7 @@ const PAGES: Item[] = [
   { id: 'p-dashboard', label: 'Dashboard', hint: 'Resumen general', href: '/dashboard', group: 'Ir a' },
   { id: 'p-mov', label: 'Movimientos', hint: 'Historial', href: '/movimientos', group: 'Ir a' },
   { id: 'p-acc', label: 'Cuentas', hint: 'Saldos', href: '/cuentas', group: 'Ir a' },
+  { id: 'p-cat', label: 'Categorías', hint: 'Clasificación', href: '/categorias', group: 'Ir a' },
   { id: 'p-inv', label: 'Inversiones', hint: 'Rentabilidad', href: '/inversiones', group: 'Ir a' },
   {
     id: 'p-sch',
