@@ -83,6 +83,11 @@ export function fromDateInputValue(value: string): number {
   return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1, 12, 0, 0, 0).getTime();
 }
 
+export function startOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
 export function startOfMonth(timestamp: number): number {
   const date = new Date(timestamp);
   return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
