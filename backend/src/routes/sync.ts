@@ -45,15 +45,22 @@ app.get('/', async (c) => {
   const userId = getUserId(c);
   const since = Math.max(0, Number(c.req.query('since') ?? 0) || 0);
   const result: Record<string, unknown[]> = {};
+  const errors: Record<string, string> = {};
 
   for (const [key, query] of Object.entries(pullQueries)) {
-    const usesSingleSince = key === 'categories' || key === 'snapshots' || key === 'goalAllocations';
-    const rows = usesSingleSince
-      ? await c.env.DB.prepare(query).bind(since, userId).all()
-      : await c.env.DB.prepare(query).bind(since, since, userId).all();
-    result[key] = rows.results.map((row) => toClientRecord(row as Record<string, unknown>));
+    try {
+      const usesSingleSince = key === 'categories' || key === 'snapshots' || key === 'goalAllocations';
+      const rows = usesSingleSince
+        ? await c.env.DB.prepare(query).bind(since, userId).all()
+        : await c.env.DB.prepare(query).bind(since, since, userId).all();
+      result[key] = rows.results.map((row) => toClientRecord(row as Record<string, unknown>));
+    } catch (err) {
+      console.error(`Sync pull error [${key}]:`, err);
+      errors[key] = err instanceof Error ? err.message : String(err);
+      result[key] = [];
+    }
   }
-  return c.json(result);
+  return c.json({ ...result, ...(Object.keys(errors).length ? { _errors: errors } : {}) });
 });
 
 app.post('/push', async (c) => {
