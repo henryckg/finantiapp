@@ -172,7 +172,7 @@ export const useDataStore = create<DataState>((set, get) => {
       }
       set({ syncing: true, syncQueued: false });
       const result = await syncNow();
-      if (!result.skipped && !result.error) {
+      if (!result.skipped && (!result.error || result.pulled > 0)) {
         await get().refresh();
       }
       set({ syncing: false, lastSyncError: result.error ?? null });

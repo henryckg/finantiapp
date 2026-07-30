@@ -67,7 +67,7 @@ export async function syncNow(): Promise<SyncResult> {
     }
 
     const since = getLastSyncAt() ?? 0;
-    const remote = await apiFetch<Partial<Snapshot>>(`/sync?since=${since}`);
+    const remote = await apiFetch<Partial<Snapshot> & { _errors?: Record<string, string> }>(`/sync?since=${since}`);
 
     let pulled = 0;
     for (const [store, records] of Object.entries(remote)) {
@@ -77,6 +77,11 @@ export async function syncNow(): Promise<SyncResult> {
     }
 
     setLastSyncAt(Date.now());
+    const pullErrors = remote._errors;
+    if (pullErrors && Object.keys(pullErrors).length) {
+      const detail = Object.entries(pullErrors).map(([store, msg]) => `${store}: ${msg}`).join(' | ');
+      return { pushed: pushedCount, pulled, skipped: false, error: `Sync parcial: ${detail}` };
+    }
     return { pushed: pushedCount, pulled, skipped: false };
   } catch (error) {
     return {
