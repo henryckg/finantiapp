@@ -4,6 +4,7 @@ import { useAppData, useAccountBalances } from '../hooks/useAppData';
 import { useDataStore } from '../store/data';
 import { ACCOUNT_TYPE_LABELS, type Account, type AccountType } from '../types';
 import { formatMoney } from '../lib/format';
+import { sortAccounts, sortTransactions } from '../lib/sort';
 import { Badge, EmptyState, MetricCard, Panel, Spinner } from '../components/ui/Primitives';
 import { Button } from '../components/ui/Button';
 import { FieldRow, Input, Select } from '../components/ui/Field';
@@ -38,14 +39,15 @@ export default function Accounts() {
     [accounts, balances],
   );
 
+  const sortedAccounts = useMemo(() => sortAccounts(accounts), [accounts]);
+
   const selected = accounts.find((account) => account.id === selectedId);
 
   const selectedTransactions = useMemo(() => {
     if (!selected) return [];
-    return transactions
-      .filter((tx) => tx.accountId === selected.id || tx.toAccountId === selected.id)
-      .sort((a, b) => b.date - a.date)
-      .slice(0, 40);
+    return sortTransactions(
+      transactions.filter((tx) => tx.accountId === selected.id || tx.toAccountId === selected.id),
+    ).slice(0, 40);
   }, [selected, transactions]);
 
   const openCreate = () => {
@@ -115,7 +117,7 @@ export default function Accounts() {
           />
         ) : (
           <ul className="divide-border-subtle/70 divide-y">
-            {accounts.map((account) => {
+            {sortedAccounts.map((account) => {
               const balance = balances[account.id] ?? 0;
               return (
                 <li key={account.id} className="row-hover flex items-center gap-3 px-4 py-3">

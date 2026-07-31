@@ -4,6 +4,7 @@ import { useAppData } from '../hooks/useAppData';
 import { useDataStore } from '../store/data';
 import { TRANSACTION_TYPE_LABELS, type Transaction, type TransactionType } from '../types';
 import { formatMoney, toDateInputValue, fromDateInputValue } from '../lib/format';
+import { sortTransactions } from '../lib/sort';
 import { isExpenseType } from '../lib/profitability';
 import { Button } from '../components/ui/Button';
 import { Input, Select } from '../components/ui/Field';
@@ -29,8 +30,8 @@ export default function Transactions() {
     const fromTs = from ? fromDateInputValue(from) : null;
     const toTs = to ? fromDateInputValue(to) + 86_399_999 : null;
 
-    return [...transactions]
-      .filter((tx) => {
+    return sortTransactions(
+      transactions.filter((tx) => {
         if (type && tx.type !== type) return false;
         if (accountId && tx.accountId !== accountId && tx.toAccountId !== accountId) return false;
         if (categoryId && tx.categoryId !== categoryId) return false;
@@ -41,8 +42,8 @@ export default function Transactions() {
           if (!haystack.includes(term)) return false;
         }
         return true;
-      })
-      .sort((a, b) => b.date - a.date);
+      }),
+    );
   }, [transactions, type, accountId, categoryId, search, from, to]);
 
   const totals = useMemo(() => {

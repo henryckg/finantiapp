@@ -4,6 +4,7 @@ import { useAppData, usePortfolio } from '../hooks/useAppData';
 import { formatLongMonth, formatMoney, formatPercent, relativeDayLabel } from '../lib/format';
 import { goalProgress, liquidTotal } from '../lib/profitability';
 import { expensesByCategory, monthSummary } from '../lib/reports';
+import { sortTransactions } from '../lib/sort';
 import { Badge, MetricCard, Panel, ProgressBar, Spinner } from '../components/ui/Primitives';
 import { Button } from '../components/ui/Button';
 import { TransactionTable } from '../components/transactions/TransactionTable';
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const summary = useMemo(() => monthSummary(transactions, now), [transactions, now]);
 
   const recentTransactions = useMemo(
-    () => [...transactions].sort((a, b) => b.date - a.date).slice(0, 6),
+    () => sortTransactions(transactions).slice(0, 6),
     [transactions],
   );
 
