@@ -1,98 +1,98 @@
 import type { Snapshot } from './db';
-import { loadSnapshot, putMany } from './db';
-import { apiFetch } from './api';
+import { getMeta, replaceCache, setMeta } from './db';
+import { apiFetchWithETag } from './api';
 import { API_URL, IS_DEMO } from './config';
 
-const SYNC_META_KEY = 'finanzas.lastSyncAt';
+// El ETag se guarda en IndexedDB (meta), no en localStorage: persiste entre
+// sesiones y sobrevive limpiezas de storage del navegador, pero sigue siendo
+// por dispositivo — cada navegador trackea qué versión de datos ya tiene.
+const ETAG_META_KEY = 'finanzas.syncEtag';
 
-export function getLastSyncAt(): number | null {
-  if (typeof localStorage === 'undefined') return null;
-  const raw = localStorage.getItem(SYNC_META_KEY);
-  return raw ? Number(raw) : null;
+export async function getStoredEtag(): Promise<string | null> {
+  return (await getMeta<string>(ETAG_META_KEY)) ?? null;
 }
 
-function setLastSyncAt(value: number): void {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(SYNC_META_KEY, String(value));
+async function storeEtag(etag: string | null): Promise<void> {
+  if (etag) await setMeta(ETAG_META_KEY, etag);
 }
 
-export function pendingCount(snapshot: Snapshot): number {
-  return Object.values(snapshot)
-    .flat()
-    .filter((record) => (record as { syncStatus?: string }).syncStatus === 'pending').length;
-}
-
-export interface SyncResult {
-  pushed: number;
-  pulled: number;
-  skipped: boolean;
+export interface FetchResult {
+  /** true si el servidor respondió 304 (el caché local seguía siendo válido). */
+  notModified: boolean;
+  /** Snapshot fresco cuando notModified=false; undefined cuando notModified=true. */
+  snapshot?: Snapshot;
   error?: string;
 }
 
-export async function syncNow(): Promise<SyncResult> {
+/**
+ * Re-fetch condicional desde el backend usando ETag.
+ * - Envía el ETag guardado en If-None-Match.
+ * - 304 → el caché local sigue siendo válido, no se transfiere nada.
+ * - 200 → reemplaza por completo el caché IndexedDB y devuelve el snapshot.
+ *
+ * Las mutaciones (create/update/delete) NO pasan por acá: van directo a las
+ * rutas REST. Esta función solo sincroniza cambios hechos en OTROS
+ * navegadores (o al arrancar la app).
+ */
+export async function fetchAll(): Promise<FetchResult> {
   if (IS_DEMO || !API_URL) {
-    return { pushed: 0, pulled: 0, skipped: true };
+    return { notModified: true };
   }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return { pushed: 0, pulled: 0, skipped: true, error: 'Sin conexión' };
+    return { notModified: true, error: 'Sin conexión' };
   }
 
-  const snapshot = await loadSnapshot();
-  const pending = {
-    accounts: snapshot.accounts.filter((r) => r.syncStatus === 'pending'),
-    categories: snapshot.categories.filter((r) => r.syncStatus === 'pending'),
-    transactions: snapshot.transactions.filter((r) => r.syncStatus === 'pending'),
-    investments: snapshot.investments.filter((r) => r.syncStatus === 'pending'),
-    snapshots: snapshot.snapshots.filter((r) => r.syncStatus === 'pending'),
-    scheduledExpenses: snapshot.scheduledExpenses.filter((r) => r.syncStatus === 'pending'),
-    goals: snapshot.goals.filter((r) => r.syncStatus === 'pending'),
-    goalAllocations: snapshot.goalAllocations.filter((r) => r.syncStatus === 'pending'),
-  };
-
-  const pushedCount = Object.values(pending).reduce((sum, list) => sum + list.length, 0);
-
   try {
-    if (pushedCount > 0) {
-      await apiFetch('/sync/push', { method: 'POST', body: pending });
-      await Promise.all(
-        Object.entries(pending).map(([store, records]) =>
-          records.length
-            ? putMany(
-                store as keyof typeof pending,
-                records.map((record) => ({ ...record, syncStatus: 'synced' as const })) as never,
-              )
-            : Promise.resolve(),
-        ),
-      );
+    const etag = await getStoredEtag();
+    const result = await apiFetchWithETag<Partial<Snapshot> & { _errors?: Record<string, string> }>(
+      '/sync',
+      { method: 'GET', etag },
+    );
+
+    if (result.notModified) {
+      return { notModified: true };
     }
 
-    const since = getLastSyncAt() ?? 0;
-    const remote = await apiFetch<Partial<Snapshot> & { _errors?: Record<string, string> }>(`/sync?since=${since}`);
+    const remote = result.data;
+    const snapshot: Snapshot = {
+      accounts: (remote.accounts as Snapshot['accounts']) ?? [],
+      categories: (remote.categories as Snapshot['categories']) ?? [],
+      transactions: (remote.transactions as Snapshot['transactions']) ?? [],
+      investments: (remote.investments as Snapshot['investments']) ?? [],
+      snapshots: (remote.snapshots as Snapshot['snapshots']) ?? [],
+      scheduledExpenses: (remote.scheduledExpenses as Snapshot['scheduledExpenses']) ?? [],
+      goals: (remote.goals as Snapshot['goals']) ?? [],
+      goalAllocations: (remote.goalAllocations as Snapshot['goalAllocations']) ?? [],
+    };
 
-    let pulled = 0;
-    for (const [store, records] of Object.entries(remote)) {
-      if (!Array.isArray(records) || records.length === 0) continue;
-      pulled += records.length;
-      await putMany(store as keyof Snapshot, records as never);
-    }
+    await replaceCache(snapshot);
+    await storeEtag(result.etag);
 
-    setLastSyncAt(Date.now());
     const pullErrors = remote._errors;
     if (pullErrors && Object.keys(pullErrors).length) {
-      const detail = Object.entries(pullErrors).map(([store, msg]) => `${store}: ${msg}`).join(' | ');
-      return { pushed: pushedCount, pulled, skipped: false, error: `Sync parcial: ${detail}` };
+      const detail = Object.entries(pullErrors)
+        .map(([store, msg]) => `${store}: ${msg}`)
+        .join(' | ');
+      return { notModified: false, snapshot, error: `Sync parcial: ${detail}` };
     }
-    return { pushed: pushedCount, pulled, skipped: false };
+
+    return { notModified: false, snapshot };
   } catch (error) {
     return {
-      pushed: 0,
-      pulled: 0,
-      skipped: false,
+      notModified: true,
       error: error instanceof Error ? error.message : 'Error de sincronización',
     };
   }
 }
 
+/**
+ * Registra listeners para refrescar datos cuando:
+ * - vuelve la conexión (evento online)
+ * - la pestaña vuelve a ser visible (visibilitychange)
+ * - cada 5 minutos (interval)
+ *
+ * Reutilizado por SyncIndicator para disparar el re-fetch condicional.
+ */
 export function registerSyncListeners(onSync: () => void): () => void {
   if (typeof window === 'undefined') return () => {};
   const handler = () => onSync();

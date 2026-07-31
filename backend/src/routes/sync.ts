@@ -8,17 +8,6 @@ app.use('*', authMiddleware);
 
 const syncSchema = z.record(z.string(), z.array(z.record(z.string(), z.unknown()))).default({});
 
-const pullQueries: Record<string, string> = {
-  accounts: 'SELECT * FROM accounts WHERE (updated_at > ? OR created_at > ?) AND user_id = ?',
-  categories: 'SELECT * FROM categories WHERE created_at > ? AND user_id = ?',
-  transactions: 'SELECT * FROM transactions WHERE (updated_at > ? OR created_at > ?) AND user_id = ?',
-  investments: 'SELECT * FROM investments WHERE (updated_at > ? OR created_at > ?) AND user_id = ?',
-  snapshots: `SELECT s.* FROM investment_value_snapshots s JOIN investments i ON i.id = s.investment_id WHERE s.created_at > ? AND i.user_id = ?`,
-  scheduledExpenses: 'SELECT * FROM scheduled_expenses WHERE (updated_at > ? OR created_at > ?) AND user_id = ?',
-  goals: 'SELECT * FROM goals WHERE (updated_at > ? OR created_at > ?) AND user_id = ?',
-  goalAllocations: `SELECT a.* FROM goal_allocations a JOIN goals g ON g.id = a.goal_id WHERE a.created_at > ? AND g.user_id = ?`,
-};
-
 const tableNames: Record<string, string> = {
   accounts: 'accounts',
   categories: 'categories',
@@ -41,18 +30,66 @@ const pushOrder = [
   'goalAllocations',
 ] as const;
 
+// Consulta única que calcula un versionado barato de todas las tablas del
+// usuario: combina COUNT(*) (detecta inserts/deletes) con MAX(updated_at |
+// created_at) (detecta updates/inserts). Si algo cambió en cualquier tabla,
+// el valor cambia y el ETag ya no coincide → el cliente recibe datos frescos.
+// Si nada cambió → 304 Not Modified, cero transferencia.
+const versionQuery = `
+SELECT
+  (SELECT COUNT(*) FROM accounts WHERE user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(updated_at) FROM accounts WHERE user_id = ?1), 0)
+  || ':' || (SELECT COUNT(*) FROM categories WHERE user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(created_at) FROM categories WHERE user_id = ?1), 0)
+  || ':' || (SELECT COUNT(*) FROM transactions WHERE user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(updated_at) FROM transactions WHERE user_id = ?1), 0)
+  || ':' || (SELECT COUNT(*) FROM investments WHERE user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(updated_at) FROM investments WHERE user_id = ?1), 0)
+  || ':' || (SELECT COUNT(*) FROM scheduled_expenses WHERE user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(updated_at) FROM scheduled_expenses WHERE user_id = ?1), 0)
+  || ':' || (SELECT COUNT(*) FROM goals WHERE user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(updated_at) FROM goals WHERE user_id = ?1), 0)
+  || ':' || (SELECT COUNT(*) FROM investment_value_snapshots s JOIN investments i ON i.id = s.investment_id WHERE i.user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(s.created_at) FROM investment_value_snapshots s JOIN investments i ON i.id = s.investment_id WHERE i.user_id = ?1), 0)
+  || ':' || (SELECT COUNT(*) FROM goal_allocations a JOIN goals g ON g.id = a.goal_id WHERE g.user_id = ?1)
+  || ':' || COALESCE((SELECT MAX(a.created_at) FROM goal_allocations a JOIN goals g ON g.id = a.goal_id WHERE g.user_id = ?1), 0)
+  AS version
+`.trim();
+
+// Queries de full-fetch (sin filtro since): devuelven TODOS los registros del
+// usuario. Se usan cuando el ETag cambió, para que el cliente reemplace por
+// completo su caché local y así detecte borrados hechos en otros navegadores.
+const fullFetchQueries: Record<string, string> = {
+  accounts: 'SELECT * FROM accounts WHERE user_id = ? ORDER BY created_at',
+  categories: 'SELECT * FROM categories WHERE user_id = ? ORDER BY name',
+  transactions: 'SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC',
+  investments: 'SELECT * FROM investments WHERE user_id = ? ORDER BY name',
+  snapshots: `SELECT s.* FROM investment_value_snapshots s JOIN investments i ON i.id = s.investment_id WHERE i.user_id = ? ORDER BY s.date`,
+  scheduledExpenses: 'SELECT * FROM scheduled_expenses WHERE user_id = ? ORDER BY estimated_date',
+  goals: 'SELECT * FROM goals WHERE user_id = ? ORDER BY created_at DESC',
+  goalAllocations: `SELECT a.* FROM goal_allocations a JOIN goals g ON g.id = a.goal_id WHERE g.user_id = ? ORDER BY a.created_at`,
+};
+
 app.get('/', async (c) => {
   const userId = getUserId(c);
-  const since = Math.max(0, Number(c.req.query('since') ?? 0) || 0);
+
+  // Calcular ETag: una sola query agregada sobre todas las tablas del usuario.
+  const versionRow = await c.env.DB.prepare(versionQuery).bind(userId).first<{ version: string }>();
+  const etag = `"${versionRow?.version ?? '0'}"`;
+
+  // Si el cliente envía If-None-Match y coincide, no hubo cambios → 304.
+  const ifNoneMatch = c.req.header('If-None-Match');
+  if (ifNoneMatch && ifNoneMatch === etag) {
+    return new Response(null, { status: 304, headers: { ETag: etag } });
+  }
+
+  // Hubo cambios (o es la primera carga): devolver todo.
   const result: Record<string, unknown[]> = {};
   const errors: Record<string, string> = {};
 
-  for (const [key, query] of Object.entries(pullQueries)) {
+  for (const [key, query] of Object.entries(fullFetchQueries)) {
     try {
-      const usesSingleSince = key === 'categories' || key === 'snapshots' || key === 'goalAllocations';
-      const rows = usesSingleSince
-        ? await c.env.DB.prepare(query).bind(since, userId).all()
-        : await c.env.DB.prepare(query).bind(since, since, userId).all();
+      const rows = await c.env.DB.prepare(query).bind(userId).all();
       result[key] = rows.results.map((row) => toClientRecord(row as Record<string, unknown>));
     } catch (err) {
       console.error(`Sync pull error [${key}]:`, err);
@@ -60,7 +97,10 @@ app.get('/', async (c) => {
       result[key] = [];
     }
   }
-  return c.json({ ...result, ...(Object.keys(errors).length ? { _errors: errors } : {}) });
+
+  return c.json({ ...result, ...(Object.keys(errors).length ? { _errors: errors } : {}) }, 200, {
+    ETag: etag,
+  });
 });
 
 app.post('/push', async (c) => {

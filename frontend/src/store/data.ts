@@ -19,7 +19,8 @@ import {
   type Snapshot,
   type StoreName,
 } from '../lib/db';
-import { syncNow } from '../lib/sync';
+import { fetchAll } from '../lib/sync';
+import { apiFetch } from '../lib/api';
 import { useAuthStore } from './auth';
 
 type NewRecord<T> = Omit<T, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'syncStatus'>;
@@ -42,8 +43,6 @@ function uid(): string {
 function ownerId(): string {
   return useAuthStore.getState().user?.id ?? 'demo-user';
 }
-
-const nextSyncStatus = () => (IS_DEMO ? ('synced' as const) : ('pending' as const));
 
 interface DataState extends Snapshot {
   ready: boolean;
@@ -105,7 +104,9 @@ export const useDataStore = create<DataState>((set, get) => {
     set({ [key]: records } as unknown as Partial<DataState>);
   }
 
-  async function upsert<K extends StoreName>(store: K, record: Snapshot[K][number]) {
+  // Escribe en el caché IndexedDB + actualiza el estado de Zustand.
+  // NO llama a sync(): las mutaciones ya fueron al servidor via REST.
+  async function cacheUpsert<K extends StoreName>(store: K, record: Snapshot[K][number]) {
     await persist(store, record);
     const current = get()[store] as { id: string }[];
     const exists = current.some((item) => item.id === record.id);
@@ -113,17 +114,16 @@ export const useDataStore = create<DataState>((set, get) => {
       ? current.map((item) => (item.id === record.id ? record : item))
       : [...current, record];
     replaceInState(store, next as Snapshot[K]);
-    void get().sync();
   }
 
-  async function drop<K extends StoreName>(store: K, id: string) {
+  // Borra del caché IndexedDB + actualiza el estado de Zustand.
+  async function cacheDrop<K extends StoreName>(store: K, id: string) {
     await remove(store, id);
     const current = get()[store] as Snapshot[K];
     replaceInState(
       store,
       current.filter((item) => item.id !== id) as Snapshot[K],
     );
-    void get().sync();
   }
 
   function find<K extends StoreName>(store: K, id: string): Snapshot[K][number] | undefined {
@@ -145,8 +145,10 @@ export const useDataStore = create<DataState>((set, get) => {
         if (IS_DEMO) {
           await seedDemoIfNeeded();
         }
+        // Render inmediato desde el caché IndexedDB (apertura instantánea).
         const snapshot = await loadSnapshot();
         set({ ...snapshot, ready: true, loading: false });
+        // Reconciliar con el backend en segundo plano (ETag condicional).
         if (!IS_DEMO) {
           void get().sync();
         }
@@ -171,9 +173,12 @@ export const useDataStore = create<DataState>((set, get) => {
         return;
       }
       set({ syncing: true, syncQueued: false });
-      const result = await syncNow();
-      if (!result.skipped && (!result.error || result.pulled > 0)) {
-        await get().refresh();
+      const result = await fetchAll();
+      // Si el servidor devolvió datos frescos (200, no 304), reemplazar el
+      // estado con el snapshot completo. Esto detecta borrados hechos en
+      // otros navegadores que el caché local no tenía.
+      if (!result.notModified && result.snapshot) {
+        set({ ...result.snapshot });
       }
       set({ syncing: false, lastSyncError: result.error ?? null });
       if (get().syncQueued) {
@@ -187,105 +192,160 @@ export const useDataStore = create<DataState>((set, get) => {
     },
 
     createAccount: async (input) => {
-      const now = Date.now();
-      const record: Account = {
-        ...input,
-        id: uid(),
-        userId: ownerId(),
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: nextSyncStatus(),
-      };
-      await upsert('accounts', record);
+      if (IS_DEMO) {
+        const now = Date.now();
+        const record: Account = {
+          ...input,
+          id: uid(),
+          userId: ownerId(),
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('accounts', record);
+        return record;
+      }
+      const created = await apiFetch<Account>('/accounts', { method: 'POST', body: input });
+      const record: Account = { ...created, syncStatus: 'synced' };
+      await cacheUpsert('accounts', record);
       return record;
     },
 
     updateAccount: async (id, patch) => {
       const existing = find('accounts', id);
       if (!existing) return;
-      await upsert('accounts', {
-        ...existing,
-        ...patch,
-        updatedAt: Date.now(),
-        syncStatus: nextSyncStatus(),
-      });
+      if (IS_DEMO) {
+        await cacheUpsert('accounts', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
+        return;
+      }
+      await apiFetch(`/accounts/${id}`, { method: 'PUT', body: patch });
+      await cacheUpsert('accounts', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
     },
 
     deleteAccount: async (id) => {
-      await drop('accounts', id);
+      if (!IS_DEMO) {
+        await apiFetch(`/accounts/${id}`, { method: 'DELETE' });
+      }
+      await cacheDrop('accounts', id);
     },
 
     createCategory: async (input) => {
-      const record: Category = {
-        ...input,
-        id: uid(),
-        userId: ownerId(),
-        createdAt: Date.now(),
-        syncStatus: nextSyncStatus(),
-      };
-      await upsert('categories', record);
+      if (IS_DEMO) {
+        const record: Category = {
+          ...input,
+          id: uid(),
+          userId: ownerId(),
+          createdAt: Date.now(),
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('categories', record);
+        return record;
+      }
+      const created = await apiFetch<Category>('/categories', { method: 'POST', body: input });
+      const record: Category = { ...created, syncStatus: 'synced' };
+      await cacheUpsert('categories', record);
       return record;
     },
 
     updateCategory: async (id, patch) => {
       const existing = find('categories', id);
       if (!existing) return;
-      await upsert('categories', { ...existing, ...patch, syncStatus: nextSyncStatus() });
+      if (IS_DEMO) {
+        await cacheUpsert('categories', { ...existing, ...patch, syncStatus: 'synced' });
+        return;
+      }
+      await apiFetch(`/categories/${id}`, { method: 'PUT', body: patch });
+      await cacheUpsert('categories', { ...existing, ...patch, syncStatus: 'synced' });
     },
 
     deleteCategory: async (id) => {
-      await drop('categories', id);
+      if (!IS_DEMO) {
+        await apiFetch(`/categories/${id}`, { method: 'DELETE' });
+      }
+      await cacheDrop('categories', id);
     },
 
     createTransaction: async (input) => {
-      const now = Date.now();
-      const record: Transaction = {
-        ...input,
-        id: uid(),
-        userId: ownerId(),
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: nextSyncStatus(),
-      };
-      await upsert('transactions', record);
+      if (IS_DEMO) {
+        const now = Date.now();
+        const record: Transaction = {
+          ...input,
+          id: uid(),
+          userId: ownerId(),
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('transactions', record);
+        return record;
+      }
+      const created = await apiFetch<Transaction>('/transactions', { method: 'POST', body: input });
+      const record: Transaction = { ...created, syncStatus: 'synced' };
+      await cacheUpsert('transactions', record);
       return record;
     },
 
     updateTransaction: async (id, patch) => {
       const existing = find('transactions', id);
       if (!existing) return;
-      await upsert('transactions', {
-        ...existing,
-        ...patch,
-        updatedAt: Date.now(),
-        syncStatus: nextSyncStatus(),
-      });
+      if (IS_DEMO) {
+        await cacheUpsert('transactions', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
+        return;
+      }
+      await apiFetch(`/transactions/${id}`, { method: 'PUT', body: patch });
+      await cacheUpsert('transactions', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
     },
 
     deleteTransaction: async (id) => {
-      await drop('transactions', id);
+      if (!IS_DEMO) {
+        await apiFetch(`/transactions/${id}`, { method: 'DELETE' });
+      }
+      await cacheDrop('transactions', id);
     },
 
     createInvestment: async (input) => {
-      const now = Date.now();
-      const record: Investment = {
-        ...input,
-        id: uid(),
-        userId: ownerId(),
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: nextSyncStatus(),
-      };
-      await upsert('investments', record);
-      if (record.currentValue > 0) {
-        await upsert('snapshots', {
+      if (IS_DEMO) {
+        const now = Date.now();
+        const record: Investment = {
+          ...input,
           id: uid(),
+          userId: ownerId(),
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('investments', record);
+        if (record.currentValue > 0) {
+          await cacheUpsert('snapshots', {
+            id: uid(),
+            investmentId: record.id,
+            value: record.currentValue,
+            date: now,
+            createdAt: now,
+            syncStatus: 'synced',
+          });
+        }
+        return record;
+      }
+      const created = await apiFetch<Investment>('/investments', { method: 'POST', body: input });
+      const record: Investment = { ...created, syncStatus: 'synced' };
+      await cacheUpsert('investments', record);
+      // El backend POST /investments no crea snapshot inicial; lo hacemos con
+      // update-value si hay un currentValue > 0.
+      if (record.currentValue > 0) {
+        const res = await apiFetch<{ ok: boolean; snapshotId: string }>(
+          `/investments/${record.id}/update-value`,
+          { method: 'POST', body: { value: record.currentValue, date: record.createdAt } },
+        );
+        const snapshot: InvestmentValueSnapshot = {
+          id: res.snapshotId,
           investmentId: record.id,
           value: record.currentValue,
-          date: now,
-          createdAt: now,
-          syncStatus: nextSyncStatus(),
-        });
+          date: record.createdAt,
+          createdAt: record.createdAt,
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('snapshots', snapshot);
       }
       return record;
     },
@@ -293,76 +353,135 @@ export const useDataStore = create<DataState>((set, get) => {
     updateInvestment: async (id, patch) => {
       const existing = find('investments', id);
       if (!existing) return;
-      await upsert('investments', {
-        ...existing,
-        ...patch,
-        updatedAt: Date.now(),
-        syncStatus: nextSyncStatus(),
-      });
+      if (IS_DEMO) {
+        await cacheUpsert('investments', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
+        return;
+      }
+      await apiFetch(`/investments/${id}`, { method: 'PUT', body: patch });
+      await cacheUpsert('investments', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
     },
 
     deleteInvestment: async (id) => {
-      await drop('investments', id);
+      if (!IS_DEMO) {
+        // El backend DELETE /investments/:id borra también los snapshots.
+        await apiFetch(`/investments/${id}`, { method: 'DELETE' });
+      }
+      await cacheDrop('investments', id);
       const related = get().snapshots.filter((snap) => snap.investmentId === id);
       for (const snap of related) {
-        await drop('snapshots', snap.id);
+        await cacheDrop('snapshots', snap.id);
       }
     },
 
     updateInvestmentValue: async (id, value, date = Date.now()) => {
       const existing = find('investments', id);
       if (!existing) return;
-      await upsert('investments', {
-        ...existing,
-        currentValue: value,
-        updatedAt: date,
-        syncStatus: nextSyncStatus(),
-      });
+      if (IS_DEMO) {
+        await cacheUpsert('investments', { ...existing, currentValue: value, updatedAt: date, syncStatus: 'synced' });
+        const snapshot: InvestmentValueSnapshot = {
+          id: uid(),
+          investmentId: id,
+          value,
+          date,
+          createdAt: Date.now(),
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('snapshots', snapshot);
+        return;
+      }
+      const res = await apiFetch<{ ok: boolean; snapshotId: string }>(
+        `/investments/${id}/update-value`,
+        { method: 'POST', body: { value, date } },
+      );
+      await cacheUpsert('investments', { ...existing, currentValue: value, updatedAt: date, syncStatus: 'synced' });
       const snapshot: InvestmentValueSnapshot = {
-        id: uid(),
+        id: res.snapshotId,
         investmentId: id,
         value,
         date,
         createdAt: Date.now(),
-        syncStatus: nextSyncStatus(),
+        syncStatus: 'synced',
       };
-      await upsert('snapshots', snapshot);
+      await cacheUpsert('snapshots', snapshot);
     },
 
     createScheduledExpense: async (input) => {
-      const now = Date.now();
-      const record: ScheduledExpense = {
-        ...input,
-        id: uid(),
-        userId: ownerId(),
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: nextSyncStatus(),
-      };
-      await upsert('scheduledExpenses', record);
+      if (IS_DEMO) {
+        const now = Date.now();
+        const record: ScheduledExpense = {
+          ...input,
+          id: uid(),
+          userId: ownerId(),
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('scheduledExpenses', record);
+        return record;
+      }
+      const created = await apiFetch<ScheduledExpense>('/scheduled-expenses', {
+        method: 'POST',
+        body: input,
+      });
+      const record: ScheduledExpense = { ...created, syncStatus: 'synced' };
+      await cacheUpsert('scheduledExpenses', record);
       return record;
     },
 
     updateScheduledExpense: async (id, patch) => {
       const existing = find('scheduledExpenses', id);
       if (!existing) return;
-      await upsert('scheduledExpenses', {
-        ...existing,
-        ...patch,
-        updatedAt: Date.now(),
-        syncStatus: nextSyncStatus(),
-      });
+      if (IS_DEMO) {
+        await cacheUpsert('scheduledExpenses', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
+        return;
+      }
+      await apiFetch(`/scheduled-expenses/${id}`, { method: 'PUT', body: patch });
+      await cacheUpsert('scheduledExpenses', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
     },
 
     deleteScheduledExpense: async (id) => {
-      await drop('scheduledExpenses', id);
+      if (!IS_DEMO) {
+        await apiFetch(`/scheduled-expenses/${id}`, { method: 'DELETE' });
+      }
+      await cacheDrop('scheduledExpenses', id);
     },
 
     markScheduledExpensePaid: async (id, accountId, date = Date.now()) => {
       const existing = find('scheduledExpenses', id);
       if (!existing || existing.status === 'paid') return;
 
-      const transaction = await get().createTransaction({
+      if (IS_DEMO) {
+        const transaction = await get().createTransaction({
+          type: 'expense',
+          amount: existing.amount,
+          accountId,
+          toAccountId: null,
+          investmentId: null,
+          categoryId: existing.categoryId,
+          description: existing.name,
+          date,
+          notes: existing.notes,
+        });
+        await cacheUpsert('scheduledExpenses', {
+          ...existing,
+          status: 'paid',
+          linkedTransactionId: transaction.id,
+          updatedAt: Date.now(),
+          syncStatus: 'synced',
+        });
+        return;
+      }
+
+      // El backend mark-paid crea la transacción y actualiza el gasto
+      // programado en una sola operación atómica del lado del servidor.
+      const res = await apiFetch<{ ok: boolean; transactionId: string }>(
+        `/scheduled-expenses/${id}/mark-paid`,
+        { method: 'POST', body: { accountId, date } },
+      );
+      const now = Date.now();
+      const transaction: Transaction = {
+        id: res.transactionId,
+        userId: ownerId(),
         type: 'expense',
         amount: existing.amount,
         accountId,
@@ -372,63 +491,92 @@ export const useDataStore = create<DataState>((set, get) => {
         description: existing.name,
         date,
         notes: existing.notes,
-      });
-
-      await upsert('scheduledExpenses', {
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'synced',
+      };
+      await cacheUpsert('transactions', transaction);
+      await cacheUpsert('scheduledExpenses', {
         ...existing,
         status: 'paid',
-        linkedTransactionId: transaction.id,
-        updatedAt: Date.now(),
-        syncStatus: nextSyncStatus(),
+        linkedTransactionId: res.transactionId,
+        updatedAt: now,
+        syncStatus: 'synced',
       });
     },
 
     createGoal: async (input) => {
-      const now = Date.now();
-      const record: Goal = {
-        ...input,
-        id: uid(),
-        userId: ownerId(),
-        createdAt: now,
-        updatedAt: now,
-        syncStatus: nextSyncStatus(),
-      };
-      await upsert('goals', record);
+      if (IS_DEMO) {
+        const now = Date.now();
+        const record: Goal = {
+          ...input,
+          id: uid(),
+          userId: ownerId(),
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('goals', record);
+        return record;
+      }
+      const created = await apiFetch<Goal>('/goals', { method: 'POST', body: input });
+      const record: Goal = { ...created, syncStatus: 'synced' };
+      await cacheUpsert('goals', record);
       return record;
     },
 
     updateGoal: async (id, patch) => {
       const existing = find('goals', id);
       if (!existing) return;
-      await upsert('goals', {
-        ...existing,
-        ...patch,
-        updatedAt: Date.now(),
-        syncStatus: nextSyncStatus(),
-      });
+      if (IS_DEMO) {
+        await cacheUpsert('goals', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
+        return;
+      }
+      await apiFetch(`/goals/${id}`, { method: 'PUT', body: patch });
+      await cacheUpsert('goals', { ...existing, ...patch, updatedAt: Date.now(), syncStatus: 'synced' });
     },
 
     deleteGoal: async (id) => {
-      await drop('goals', id);
+      if (!IS_DEMO) {
+        // El backend DELETE /goals/:id borra también las asignaciones.
+        await apiFetch(`/goals/${id}`, { method: 'DELETE' });
+      }
+      await cacheDrop('goals', id);
       const related = get().goalAllocations.filter((alloc) => alloc.goalId === id);
       for (const alloc of related) {
-        await drop('goalAllocations', alloc.id);
+        await cacheDrop('goalAllocations', alloc.id);
       }
     },
 
     createGoalAllocation: async (input) => {
-      const record: GoalAllocation = {
-        ...input,
-        id: uid(),
-        createdAt: Date.now(),
-        syncStatus: nextSyncStatus(),
-      };
-      await upsert('goalAllocations', record);
+      if (IS_DEMO) {
+        const record: GoalAllocation = {
+          ...input,
+          id: uid(),
+          createdAt: Date.now(),
+          syncStatus: 'synced',
+        };
+        await cacheUpsert('goalAllocations', record);
+        return record;
+      }
+      const created = await apiFetch<GoalAllocation>(
+        `/goals/${input.goalId}/allocations`,
+        { method: 'POST', body: input },
+      );
+      const record: GoalAllocation = { ...created, syncStatus: 'synced' };
+      await cacheUpsert('goalAllocations', record);
       return record;
     },
 
     deleteGoalAllocation: async (id) => {
-      await drop('goalAllocations', id);
+      if (!IS_DEMO) {
+        // Necesitamos el goalId para la ruta anidada.
+        const alloc = find('goalAllocations', id);
+        if (alloc) {
+          await apiFetch(`/goals/${alloc.goalId}/allocations/${id}`, { method: 'DELETE' });
+        }
+      }
+      await cacheDrop('goalAllocations', id);
     },
   };
 });

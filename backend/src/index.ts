@@ -31,6 +31,7 @@ app.use(
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
+    exposeHeaders: ['ETag'],
     credentials: true,
   }),
 );

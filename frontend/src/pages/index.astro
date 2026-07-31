@@ -1,4 +1,7 @@
 ---
+import '../styles/global.css';
+import RootRedirect from '../islands/RootRedirect';
+
 const isDemo = (import.meta.env.PUBLIC_DEMO ?? 'true') !== 'false';
 const destination = isDemo ? '/dashboard' : '/login';
 ---
@@ -23,7 +26,7 @@ const destination = isDemo ? '/dashboard' : '/login';
     <meta name="twitter:description" content="Finanzas personales: movimientos, cuentas, inversiones y objetivos." />
     <meta name="twitter:image" content={new URL('/og.png', Astro.url.origin).toString()} />
   </head>
-  <body>
-    <p>Redirigiendo…</p>
+  <body class="min-h-dvh bg-bg-primary">
+    <RootRedirect client:only="react" />
   </body>
 </html>
