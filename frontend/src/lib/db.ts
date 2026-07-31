@@ -190,6 +190,30 @@ export async function loadSnapshot(): Promise<Snapshot> {
   };
 }
 
+/**
+ * Reemplaza por completo el caché local con datos frescos del servidor.
+ * Borra todas las tiendas y las reescribe en una sola transacción.
+ * Se usa tras un GET /sync con ETag que reportó cambios.
+ */
+export async function replaceCache(snapshot: Snapshot): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction([...ALL_STORES, 'meta'], 'readwrite');
+  await Promise.all([
+    ...ALL_STORES.map((store) => tx.objectStore(store).clear()),
+    tx.done,
+  ]);
+  await Promise.all([
+    putMany('accounts', snapshot.accounts),
+    putMany('categories', snapshot.categories),
+    putMany('transactions', snapshot.transactions),
+    putMany('investments', snapshot.investments),
+    putMany('snapshots', snapshot.snapshots),
+    putMany('scheduledExpenses', snapshot.scheduledExpenses),
+    putMany('goals', snapshot.goals),
+    putMany('goalAllocations', snapshot.goalAllocations),
+  ]);
+}
+
 export const DEMO_SEED_KEY = 'demoSeedVersion';
 export const DEMO_SEED_VERSION = 1;
 

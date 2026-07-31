@@ -86,6 +86,64 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return (await response.json()) as T;
 }
 
+/**
+ * Fetch con soporte de ETag / If-None-Match.
+ * - Si el servidor responde 304 (nada cambió), devuelve { notModified: true }.
+ * - Si responde 200, devuelve { notModified: false, data, etag }.
+ * El etag se extrae del header de respuesta para que el caller lo persista.
+ */
+export type ETagResult<T> =
+  | { notModified: true }
+  | { notModified: false; data: T; etag: string | null };
+
+export async function apiFetchWithETag<T>(
+  path: string,
+  options: RequestOptions & { etag?: string | null } = {},
+): Promise<ETagResult<T>> {
+  if (!API_URL) {
+    throw new ApiError('PUBLIC_API_URL no está configurada.', 0);
+  }
+
+  const { body, etag, retryOnUnauthorized = true, headers, ...rest } = options;
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...rest,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(etag ? { 'If-None-Match': etag } : {}),
+      ...headers,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (response.status === 401 && retryOnUnauthorized) {
+    const result = await refreshSession();
+    if (result === 'ok') {
+      return apiFetchWithETag<T>(path, { ...options, retryOnUnauthorized: false });
+    }
+  }
+
+  if (response.status === 304) {
+    return { notModified: true };
+  }
+
+  if (!response.ok) {
+    let message = `Error ${response.status}`;
+    try {
+      const data = (await response.json()) as { error?: string; message?: string };
+      message = data.error ?? data.message ?? message;
+    } catch {
+      // respuesta sin cuerpo JSON
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  const data = (await response.json()) as T;
+  return { notModified: false, data, etag: response.headers.get('ETag') };
+}
+
 export type RefreshResult = 'ok' | 'network' | 'invalid';
 
 let refreshPromise: Promise<RefreshResult> | null = null;
