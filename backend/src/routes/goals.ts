@@ -51,11 +51,12 @@ app.put('/:id', async (c) => {
 app.delete('/:id', async (c) => {
   const userId = getUserId(c);
   const id = c.req.param('id');
-  await c.env.DB.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?')
-    .bind(id, userId)
-    .run();
+  // Orden importante por foreign keys: borrar allocations antes del goal.
   await c.env.DB.prepare('DELETE FROM goal_allocations WHERE goal_id = ?')
     .bind(id)
+    .run();
+  await c.env.DB.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?')
+    .bind(id, userId)
     .run();
   return c.json({ ok: true });
 });

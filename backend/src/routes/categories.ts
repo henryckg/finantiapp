@@ -51,6 +51,13 @@ app.put('/:id', async (c) => {
 app.delete('/:id', async (c) => {
   const userId = getUserId(c);
   const id = c.req.param('id');
+  // Desvincular referencias antes de borrar la categoría.
+  await c.env.DB.prepare('UPDATE transactions SET category_id = NULL WHERE category_id = ? AND user_id = ?')
+    .bind(id, userId)
+    .run();
+  await c.env.DB.prepare('UPDATE scheduled_expenses SET category_id = NULL WHERE category_id = ? AND user_id = ?')
+    .bind(id, userId)
+    .run();
   await c.env.DB.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?')
     .bind(id, userId)
     .run();
