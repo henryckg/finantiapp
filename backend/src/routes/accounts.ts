@@ -62,6 +62,16 @@ app.put('/:id', async (c) => {
 app.delete('/:id', async (c) => {
   const userId = getUserId(c);
   const id = c.req.param('id');
+  // No se puede borrar una cuenta con transacciones: account_id es NOT NULL
+  // en transactions y no se puede desvincular sin perder el historial.
+  const count = await c.env.DB.prepare(
+    'SELECT COUNT(*) as n FROM transactions WHERE (account_id = ? OR to_account_id = ?) AND user_id = ?',
+  )
+    .bind(id, id, userId)
+    .first<{ n: number }>();
+  if (count && count.n > 0) {
+    return c.json({ error: `No se puede eliminar: la cuenta tiene ${count.n} movimiento(s) asociado(s). Borra o mueve los movimientos primero.` }, 409);
+  }
   await c.env.DB.prepare('DELETE FROM accounts WHERE id = ? AND user_id = ?')
     .bind(id, userId)
     .run();

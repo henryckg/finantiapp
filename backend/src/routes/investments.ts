@@ -75,11 +75,19 @@ app.put('/:id', async (c) => {
 app.delete('/:id', async (c) => {
   const userId = getUserId(c);
   const id = c.req.param('id');
-  await c.env.DB.prepare('DELETE FROM investments WHERE id = ? AND user_id = ?')
-    .bind(id, userId)
-    .run();
+  // Orden importante por foreign keys: borrar dependientes antes del padre.
+  // 1. Snapshots que referencian la inversión.
   await c.env.DB.prepare('DELETE FROM investment_value_snapshots WHERE investment_id = ?')
     .bind(id)
+    .run();
+  // 2. Desvincular transacciones (aportes/retiros) sin borrarlas: siguen
+  //    siendo historial financiero del usuario, solo pierden el link.
+  await c.env.DB.prepare('UPDATE transactions SET investment_id = NULL WHERE investment_id = ? AND user_id = ?')
+    .bind(id, userId)
+    .run();
+  // 3. Finalmente borrar la inversión.
+  await c.env.DB.prepare('DELETE FROM investments WHERE id = ? AND user_id = ?')
+    .bind(id, userId)
     .run();
   return c.json({ ok: true });
 });

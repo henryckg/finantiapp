@@ -14,6 +14,7 @@ import {
   unitsToCents,
 } from '../lib/format';
 import { investmentMetrics } from '../lib/profitability';
+import { sortTransactions } from '../lib/sort';
 import { Badge, EmptyState, MetricCard, Panel, Spinner } from '../components/ui/Primitives';
 import { Button } from '../components/ui/Button';
 import { FieldRow, Input, MoneyInput, Select, Textarea } from '../components/ui/Field';
@@ -78,9 +79,9 @@ export default function Investments() {
 
   const selectedMovements = useMemo(() => {
     if (!selected) return [];
-    return transactions
-      .filter((tx) => tx.investmentId === selected.id)
-      .sort((a, b) => b.date - a.date);
+    return sortTransactions(
+      transactions.filter((tx) => tx.investmentId === selected.id),
+    );
   }, [selected, transactions]);
 
   const distribution = useMemo(
