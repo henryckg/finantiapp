@@ -30,7 +30,7 @@ app.use(
       return !origin || allowed.includes(origin) ? origin ?? allowed[0] ?? '*' : '';
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowHeaders: ['Content-Type', 'Authorization', 'If-None-Match'],
     exposeHeaders: ['ETag'],
     credentials: true,
   }),
