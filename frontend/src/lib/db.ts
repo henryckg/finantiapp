@@ -141,6 +141,11 @@ export async function setMeta(key: string, value: unknown): Promise<void> {
   await db.put('meta', value, key);
 }
 
+export async function deleteMeta(key: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('meta', key);
+}
+
 export interface Snapshot {
   accounts: Account[];
   categories: Category[];
