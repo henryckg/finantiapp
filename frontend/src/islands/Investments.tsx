@@ -14,7 +14,7 @@ import {
   unitsToCents,
 } from '../lib/format';
 import { investmentMetrics } from '../lib/profitability';
-import { sortTransactions } from '../lib/sort';
+import { sortInvestments, sortTransactions } from '../lib/sort';
 import { Badge, EmptyState, MetricCard, Panel, Spinner } from '../components/ui/Primitives';
 import { Button } from '../components/ui/Button';
 import { FieldRow, Input, MoneyInput, Select, Textarea } from '../components/ui/Field';
@@ -85,7 +85,11 @@ export default function Investments() {
   }, [selected, transactions]);
 
   const distribution = useMemo(
-    () => investments.map((investment) => ({ name: investment.name, value: investment.currentValue })),
+    () =>
+      sortInvestments(investments).map((investment) => ({
+        name: investment.name,
+        value: investment.currentValue,
+      })),
     [investments],
   );
 

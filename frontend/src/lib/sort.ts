@@ -1,4 +1,4 @@
-import type { Account, Transaction } from '../types';
+import type { Account, Investment, Transaction } from '../types';
 
 /**
  * Comparador determinístico y estable para registros.
@@ -47,6 +47,21 @@ export function sortTransactions(input: Transaction[]): Transaction[] {
 export function sortAccounts(input: Account[]): Account[] {
   return [...input].sort((a, b) => {
     if (a.createdAt !== b.createdAt) return compareAsc(a.createdAt, b.createdAt);
+    return tiebreakById(a, b);
+  });
+}
+
+/**
+ * Ordena inversiones por nombre ascendente, igual que el backend
+ * (ORDER BY name). Desempata por id. Importante para los gráficos de
+ * distribución (pie): el color de cada slice se asigna por índice, así
+ * que un orden no determinístico hace que los colores se reordenen y el
+ * gráfico se re-anime tras el sync con el backend.
+ * No muta el arreglo original.
+ */
+export function sortInvestments(input: Investment[]): Investment[] {
+  return [...input].sort((a, b) => {
+    if (a.name !== b.name) return a.name < b.name ? -1 : 1;
     return tiebreakById(a, b);
   });
 }
