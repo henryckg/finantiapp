@@ -4,7 +4,7 @@ import { useAppData, usePortfolio } from '../hooks/useAppData';
 import { formatLongMonth, formatMoney, formatPercent, relativeDayLabel } from '../lib/format';
 import { goalProgress, liquidTotal } from '../lib/profitability';
 import { expensesByCategory, monthSummary } from '../lib/reports';
-import { sortTransactions } from '../lib/sort';
+import { sortTransactions, sortInvestments } from '../lib/sort';
 import { Badge, MetricCard, Panel, ProgressBar, Spinner } from '../components/ui/Primitives';
 import { Button } from '../components/ui/Button';
 import { TransactionTable } from '../components/transactions/TransactionTable';
@@ -45,7 +45,11 @@ export default function Dashboard() {
   );
 
   const distribution = useMemo(
-    () => investments.map((investment) => ({ name: investment.name, value: investment.currentValue })),
+    () =>
+      sortInvestments(investments).map((investment) => ({
+        name: investment.name,
+        value: investment.currentValue,
+      })),
     [investments],
   );
 
