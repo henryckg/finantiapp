@@ -48,6 +48,22 @@ const isDemo = (import.meta.env.PUBLIC_DEMO ?? 'true') !== 'false';
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
     />
+    <script is:inline define:vars={{ isDemo }}>
+      // Guard de autenticación a nivel layout: si no hay sesión (ni token en
+      // sessionStorage) y no estamos en modo demo, redirigimos al login antes
+      // de pintar el contenido para evitar un flash del dashboard.
+      if (!isDemo) {
+        try {
+          const hasToken = sessionStorage.getItem('finanzas.accessToken');
+          if (!hasToken) {
+            window.location.replace('/login');
+          }
+        } catch {
+          // sessionStorage inaccesible (modo privado, etc.): dejamos que el
+          // guard del island (useAppData) maneje la redirección.
+        }
+      }
+    </script>
   </head>
   <body class="min-h-dvh">
     <div class="mx-auto flex min-h-dvh w-full max-w-5xl flex-col">
