@@ -10,27 +10,35 @@ export class ApiError extends Error {
   }
 }
 
-let accessToken: string | null = null;
+// El access token se guarda en sessionStorage: sobrevive a las navegaciones
+// dentro de la PWA (Astro static = page loads completos) pero se borra al
+// cerrar la app, evitando refrescos innecesarios y sin persistirlo en disco.
+const ACCESS_KEY = 'finanzas.accessToken';
+
+function readAccessToken(): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    return sessionStorage.getItem(ACCESS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let accessToken: string | null = readAccessToken();
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    if (token) sessionStorage.setItem(ACCESS_KEY, token);
+    else sessionStorage.removeItem(ACCESS_KEY);
+  } catch {
+    // sessionStorage puede fallar (modo privado / cuota); no es crítico.
+  }
 }
 
 export function getAccessToken(): string | null {
   return accessToken;
-}
-
-const REFRESH_KEY = 'finanzas.refreshToken';
-
-export function getRefreshToken(): string | null {
-  if (typeof localStorage === 'undefined') return null;
-  return localStorage.getItem(REFRESH_KEY);
-}
-
-export function setRefreshToken(token: string | null): void {
-  if (typeof localStorage === 'undefined') return;
-  if (token) localStorage.setItem(REFRESH_KEY, token);
-  else localStorage.removeItem(REFRESH_KEY);
 }
 
 interface RequestOptions extends Omit<RequestInit, 'body'> {
@@ -47,6 +55,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   const response = await fetch(`${API_URL}${path}`, {
     ...rest,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -56,8 +65,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   });
 
   if (response.status === 401 && retryOnUnauthorized) {
-    const refreshed = await refreshSession();
-    if (refreshed) {
+    const result = await refreshSession();
+    if (result === 'ok') {
       return apiFetch<T>(path, { ...options, retryOnUnauthorized: false });
     }
   }
@@ -77,32 +86,40 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return (await response.json()) as T;
 }
 
-let refreshPromise: Promise<boolean> | null = null;
+export type RefreshResult = 'ok' | 'network' | 'invalid';
 
-export async function refreshSession(): Promise<boolean> {
+let refreshPromise: Promise<RefreshResult> | null = null;
+
+/**
+ * Refresca la sesión usando la cookie httpOnly del refresh token.
+ * - 'ok': sesión refrescada, hay nuevo access token.
+ * - 'network': no se pudo contactar al backend (offline / red inestable).
+ *   El refresh token sigue siendo potencialmente válido; no se debe cerrar sesión.
+ * - 'invalid': el backend rechazó el refresh token (401/400). Hay que loguear de nuevo.
+ */
+export async function refreshSession(): Promise<RefreshResult> {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
-    const refreshToken = getRefreshToken();
-    if (!refreshToken || !API_URL) return false;
+    if (!API_URL) return 'invalid' as RefreshResult;
 
     try {
       const response = await fetch(`${API_URL}/auth/refresh`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
       });
       if (!response.ok) {
-        setRefreshToken(null);
+        // 401/400 => token inválido o revocado. Limpiamos access token.
         setAccessToken(null);
-        return false;
+        return 'invalid';
       }
-      const data = (await response.json()) as { accessToken: string; refreshToken?: string };
+      const data = (await response.json()) as { accessToken: string };
       setAccessToken(data.accessToken);
-      if (data.refreshToken) setRefreshToken(data.refreshToken);
-      return true;
+      return 'ok';
     } catch {
-      return false;
+      // Error de red: no sabemos si el token es válido. No cerramos sesión.
+      return 'network';
     }
   })();
 
