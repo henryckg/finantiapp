@@ -27,6 +27,19 @@ function clearRefreshCookie(c: AppContext): void {
   deleteCookie(c, REFRESH_COOKIE, { path: '/', sameSite: 'None', secure: true });
 }
 
+/**
+ * Lee el refresh token enviado en el body JSON. Fallback para clientes donde
+ * la cookie httpOnly no es fiable (PWA iOS con backend cross-site, Shortcuts).
+ */
+async function readBodyRefreshToken(c: AppContext): Promise<string | null> {
+  try {
+    const body = (await c.req.json()) as { refreshToken?: unknown };
+    return typeof body?.refreshToken === 'string' ? body.refreshToken : null;
+  } catch {
+    return null;
+  }
+}
+
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -74,7 +87,10 @@ app.post('/register', zValidator('json', registerSchema), async (c) => {
   const refreshToken = await signJWT({ sub: id }, c.env.JWT_REFRESH_SECRET, REFRESH_MAX_AGE);
   setRefreshCookie(c, refreshToken);
 
-  return c.json({ user: { id, email, name: name ?? null, createdAt: now }, accessToken }, 201);
+  return c.json(
+    { user: { id, email, name: name ?? null, createdAt: now }, accessToken, refreshToken },
+    201,
+  );
 });
 
 app.post('/login', zValidator('json', loginSchema), async (c) => {
@@ -94,6 +110,7 @@ app.post('/login', zValidator('json', loginSchema), async (c) => {
   return c.json({
     user: { id: user.id, email: user.email, name: user.name, createdAt: user.created_at },
     accessToken,
+    refreshToken,
   });
 });
 
@@ -107,7 +124,7 @@ app.get('/me', authMiddleware, async (c) => {
 });
 
 app.post('/logout', async (c) => {
-  const refreshToken = getCookie(c, REFRESH_COOKIE);
+  const refreshToken = (await readBodyRefreshToken(c)) ?? getCookie(c, REFRESH_COOKIE);
   if (refreshToken) {
     const payload = await verifyJWT(refreshToken, c.env.JWT_REFRESH_SECRET);
     if (payload) {
@@ -119,7 +136,9 @@ app.post('/logout', async (c) => {
 });
 
 app.post('/refresh', async (c) => {
-  const refreshToken = getCookie(c, REFRESH_COOKIE);
+  // El body tiene prioridad: la cookie puede estar desactualizada en clientes
+  // donde el refresh token viaja en localStorage (PWA iOS).
+  const refreshToken = (await readBodyRefreshToken(c)) ?? getCookie(c, REFRESH_COOKIE);
   if (!refreshToken) return c.json({ error: 'Token requerido' }, 400);
   const payload = await verifyJWT(refreshToken, c.env.JWT_REFRESH_SECRET);
   if (!payload) {
@@ -136,7 +155,7 @@ app.post('/refresh', async (c) => {
   const accessToken = await signJWT({ sub: payload.sub }, c.env.JWT_SECRET, 900);
   const newRefreshToken = await signJWT({ sub: payload.sub }, c.env.JWT_REFRESH_SECRET, REFRESH_MAX_AGE);
   setRefreshCookie(c, newRefreshToken);
-  return c.json({ accessToken });
+  return c.json({ accessToken, refreshToken: newRefreshToken });
 });
 
 export const authRoutes = app;

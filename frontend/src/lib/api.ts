@@ -15,6 +15,30 @@ export class ApiError extends Error {
 // cerrar la app, evitando refrescos innecesarios y sin persistirlo en disco.
 const ACCESS_KEY = 'finanzas.accessToken';
 
+// El refresh token se guarda en localStorage: en iOS la cookie httpOnly no es
+// fiable cuando el backend está en otro sitio (vercel.app vs workers.dev),
+// porque WebKit bloquea cookies third-party y la PWA no las retiene.
+const REFRESH_KEY = 'finanzas.refreshToken';
+
+export function getRefreshToken(): string | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    return localStorage.getItem(REFRESH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setRefreshToken(token: string | null): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    if (token) localStorage.setItem(REFRESH_KEY, token);
+    else localStorage.removeItem(REFRESH_KEY);
+  } catch {
+    // localStorage puede fallar (modo privado / cuota); no es crítico.
+  }
+}
+
 function readAccessToken(): string | null {
   if (typeof sessionStorage === 'undefined') return null;
   try {
@@ -162,18 +186,25 @@ export async function refreshSession(): Promise<RefreshResult> {
     if (!API_URL) return 'invalid' as RefreshResult;
 
     try {
+      // Priorizamos el token guardado en localStorage (fiable en PWA iOS);
+      // la cookie httpOnly queda como fallback (web mismo-sitio).
+      const storedRefresh = getRefreshToken();
       const response = await fetch(`${API_URL}/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
+        body: storedRefresh ? JSON.stringify({ refreshToken: storedRefresh }) : undefined,
       });
       if (!response.ok) {
-        // 401/400 => token inválido o revocado. Limpiamos access token.
+        // 401/400 => token inválido o revocado. Limpiamos tokens.
         setAccessToken(null);
+        setRefreshToken(null);
         return 'invalid';
       }
-      const data = (await response.json()) as { accessToken: string };
+      const data = (await response.json()) as { accessToken: string; refreshToken?: string };
       setAccessToken(data.accessToken);
+      // El backend rota el refresh token en cada refresh: persistir el nuevo.
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
       return 'ok';
     } catch {
       // Error de red: no sabemos si el token es válido. No cerramos sesión.
