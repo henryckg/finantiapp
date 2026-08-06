@@ -12,6 +12,7 @@ import {
   unitsToCents,
 } from '../lib/format';
 import { goalProgress } from '../lib/profitability';
+import { sortAccounts, sortGoalAllocations, sortGoals, sortInvestments } from '../lib/sort';
 import {
   Badge,
   EmptyState,
@@ -51,15 +52,23 @@ export default function Goals() {
     if (param) setExpandedId(param);
   }, []);
 
+  const sortedGoals = useMemo(() => sortGoals(goals), [goals]);
+
+  const sortedAllocations = useMemo(() => sortGoalAllocations(goalAllocations), [goalAllocations]);
+
+  const sortedInvestments = useMemo(() => sortInvestments(investments), [investments]);
+
+  const sortedAccounts = useMemo(() => sortAccounts(accounts), [accounts]);
+
   const progressByGoal = useMemo(
     () =>
       Object.fromEntries(
-        goals.map((goal) => [
+        sortedGoals.map((goal) => [
           goal.id,
-          goalProgress(goal, goalAllocations, transactions, accounts, investments),
+          goalProgress(goal, sortedAllocations, transactions, accounts, investments),
         ]),
       ),
-    [goals, goalAllocations, transactions, accounts, investments],
+    [sortedGoals, sortedAllocations, transactions, accounts, investments],
   );
 
   const totals = useMemo(() => {
@@ -172,11 +181,11 @@ export default function Goals() {
           </Button>
         }
       >
-        {goals.length === 0 ? (
+        {sortedGoals.length === 0 ? (
           <EmptyState title="Sin objetivos" description="Define tu primera meta de ahorro o inversión." />
         ) : (
           <ul className="divide-border-subtle/70 divide-y">
-            {goals.map((goal) => {
+            {sortedGoals.map((goal) => {
               const progress = progressByGoal[goal.id]!;
               const expanded = expandedId === goal.id;
               return (
@@ -362,14 +371,14 @@ export default function Goals() {
             >
               <option value="">Selecciona…</option>
               <optgroup label="Inversiones">
-                {investments.map((investment) => (
+                {sortedInvestments.map((investment) => (
                   <option key={investment.id} value={`inv:${investment.id}`}>
                     {investment.name}
                   </option>
                 ))}
               </optgroup>
               <optgroup label="Cuentas">
-                {accounts.map((account) => (
+                {sortedAccounts.map((account) => (
                   <option key={account.id} value={`acc:${account.id}`}>
                     {account.name}
                   </option>
