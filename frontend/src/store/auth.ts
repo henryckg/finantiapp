@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '../types';
 import { DEMO_USER, IS_DEMO } from '../lib/config';
-import { apiFetch, setAccessToken, refreshSession } from '../lib/api';
+import { apiFetch, setAccessToken, setRefreshToken, getRefreshToken, refreshSession } from '../lib/api';
 import { getMeta, setMeta, deleteMeta } from '../lib/db';
 
 interface AuthState {
@@ -86,11 +86,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     set({ submitting: true, error: null });
     try {
-      const data = await apiFetch<{ user: User; accessToken: string }>(
+      const data = await apiFetch<{ user: User; accessToken: string; refreshToken?: string }>(
         '/auth/login',
         { method: 'POST', body: { email, password }, retryOnUnauthorized: false },
       );
       setAccessToken(data.accessToken);
+      setRefreshToken(data.refreshToken ?? null);
       await setMeta(SESSION_USER_KEY, data.user);
       set({ user: data.user, submitting: false, error: null, offline: false });
       return true;
@@ -110,11 +111,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     set({ submitting: true, error: null });
     try {
-      const data = await apiFetch<{ user: User; accessToken: string }>(
+      const data = await apiFetch<{ user: User; accessToken: string; refreshToken?: string }>(
         '/auth/register',
         { method: 'POST', body: { email, password, name }, retryOnUnauthorized: false },
       );
       setAccessToken(data.accessToken);
+      setRefreshToken(data.refreshToken ?? null);
       await setMeta(SESSION_USER_KEY, data.user);
       set({ user: data.user, submitting: false, error: null, offline: false });
       return true;
@@ -130,12 +132,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     if (!IS_DEMO) {
       try {
-        await apiFetch('/auth/logout', { method: 'POST', retryOnUnauthorized: false });
+        await apiFetch('/auth/logout', {
+          method: 'POST',
+          body: { refreshToken: getRefreshToken() },
+          retryOnUnauthorized: false,
+        });
       } catch {
         // ignoramos errores de logout remoto
       }
       await deleteMeta(SESSION_USER_KEY);
       setAccessToken(null);
+      setRefreshToken(null);
       set({ user: null, offline: false });
       return;
     }
