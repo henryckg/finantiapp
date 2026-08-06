@@ -1,4 +1,4 @@
-import type { Account, Investment, Transaction } from '../types';
+import type { Account, Goal, GoalAllocation, Investment, Transaction } from '../types';
 
 /**
  * Comparador determinístico y estable para registros.
@@ -62,6 +62,30 @@ export function sortAccounts(input: Account[]): Account[] {
 export function sortInvestments(input: Investment[]): Investment[] {
   return [...input].sort((a, b) => {
     if (a.name !== b.name) return a.name < b.name ? -1 : 1;
+    return tiebreakById(a, b);
+  });
+}
+
+/**
+ * Ordena objetivos por createdAt descendente (más nuevo primero),
+ * igual que el backend (ORDER BY created_at DESC). Desempata por id.
+ * No muta el arreglo original.
+ */
+export function sortGoals(input: Goal[]): Goal[] {
+  return [...input].sort((a, b) => {
+    if (a.createdAt !== b.createdAt) return compareDesc(a.createdAt, b.createdAt);
+    return tiebreakById(a, b);
+  });
+}
+
+/**
+ * Ordena asignaciones de objetivos por createdAt ascendente,
+ * igual que el backend (ORDER BY a.created_at). Desempata por id.
+ * No muta el arreglo original.
+ */
+export function sortGoalAllocations(input: GoalAllocation[]): GoalAllocation[] {
+  return [...input].sort((a, b) => {
+    if (a.createdAt !== b.createdAt) return compareAsc(a.createdAt, b.createdAt);
     return tiebreakById(a, b);
   });
 }
